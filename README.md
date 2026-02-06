@@ -1,29 +1,32 @@
-# BoldChrome - AI-Powered Medium Article Summarizer Extension
+# BoldChrome - Bitcoin Wallet Extension for Bold
 
-A Chrome extension built with **SvelteKit** that (for local development) shows a mock Bitcoin wallet popup with balance, transactions, and send/receive actions. It can also be extended to use Google's Generative AI for article summarization.
+A Chrome extension built with **SvelteKit** that enables secure communication between the Bold Bitcoin Wallet mobile app and your web browser. It allows you to manage Bitcoin transactions, sign PSBTs, and pair with your mobile wallet device via QR code.
 
 ## Quick Start
 
 For complete setup and development instructions, see:
 - 📖 **[BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md)** - Detailed setup guide
 - ✅ **[SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)** - Quick verification checklist
+- 🔗 **[PAIRING_VIA_QR.md](docs/PAIRING_VIA_QR.md)** - Device pairing instructions
 
 ## Overview
 
-**BoldChrome** detects when you're reading a Medium article, extracts the content, and generates a concise AI-powered summary using Google's Generative AI API.
+**BoldChrome** is a companion extension to the Bold Bitcoin Wallet that allows you to interact with your hardware-backed Bitcoin wallet from your desktop browser. Scan a QR code to pair with your mobile device and securely sign transactions.
 
 ### Features
-- 🔍 Automatic Medium article detection
-- 🤖 AI-powered content summarization
-- 💜 Clean, modern popup interface
-- ⚡ Fast and lightweight
-- 🔒 Client-side processing (API key needed)
+- 📱 QR code-based device pairing
+- 🔐 End-to-end encrypted communication (ECIES)
+- ✍️ Secure PSBT transaction signing
+- 💰 Bitcoin send/receive operations
+- 🔒 HSM-backed key management (TSS)
+- 🌐 Testnet & Mainnet support
 
 ## Prerequisites
 
 - **Node.js** v18+ and **pnpm** (or npm)
-- **Chrome** browser
-- **Google API Key** (get it free at [ai.google.dev](https://ai.google.dev))
+- **Chrome** browser (v90+)
+- **Bold Wallet mobile app** (paired device)
+- No API keys needed—fully self-custodial
 
 ## Quick Setup
 
@@ -31,20 +34,19 @@ For complete setup and development instructions, see:
 # 1. Install dependencies
 pnpm install
 
-# 2. Copy environment template
-cp .env.example .env.local
-
-# 3. Add your Google API key to .env.local
-# PUBLIC_GOOGLE_API_KEY=your_key_here
-
-# 4. Build the extension
+# 2. Build the extension
 pnpm run build
 
-# 5. Load in Chrome
+# 3. Load in Chrome
 # - Go to chrome://extensions
-# - Enable "Developer mode"
+# - Enable "Developer mode" (top-right toggle)
 # - Click "Load unpacked"
 # - Select the /build directory
+
+# 4. Open the extension and scan the QR code from your Bold mobile app
+# - Click the extension icon in Chrome toolbar
+# - Allow camera permissions when prompted
+# - Scan the pairing QR from your mobile wallet
 ```
 
 ## Development Commands
@@ -78,26 +80,33 @@ static/
 1. Build: `pnpm run build`
 2. Open Chrome: `chrome://extensions`
 3. Enable Developer Mode
+4. Click "Load unpacked" (toggle in top-right)
 4. Click "Load unpacked" → select `/build` folder
-5. Test on any Medium article
+5. Open the Bold mobile app and generate a pairing QR code
+6. Click the extension icon and scan the QR
 
 ## Troubleshooting
 
 **Extension won't load?**
 - Verify `/build/manifest.json` exists
-- Check Chrome DevTools for errors
-- Try reloading the extension
+- Check Chrome DevTools for errors (F12)
+- Try clicking "Reload" on the extension card
 
-**API key errors?**
-- Verify key at [Google AI Studio](https://ai.google.dev)
-- Check `.env.local` format
-- Rebuild after changing `.env.local`
+**Camera permissions denied?**
+- Click the extension icon → allow camera access
+- Check Chrome settings: Settings → Privacy → Site Settings → Camera
+- Reload the extension
 
-**Popup blank?**
-- Right-click popup → Inspect
-- Check Console tab for errors
-- Verify you're on a Medium article
+**QR code won't scan?**
+- Ensure good lighting and distance (6-12 inches)
+- Try rotating the QR code
+- Check browser console for camera errors
 
+**Can't connect to mobile device?**
+- Verify both devices are on the same WiFi network
+- Check local network permissions in Chrome
+- Ensure mobile app is in pairing mode
+- Try restarting both apps
 ## Documentation
 
 - [📋 Complete Build Instructions](BUILD_INSTRUCTIONS.md)
