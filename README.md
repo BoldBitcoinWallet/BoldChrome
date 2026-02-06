@@ -119,7 +119,6 @@ static/
 - **Build Tool:** Vite
 - **Language:** TypeScript
 - **Styling:** Scoped Svelte CSS
-- **API:** Google Generative AI + Chrome Extensions API
 
 ## Resources
 
