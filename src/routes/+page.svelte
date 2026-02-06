@@ -139,10 +139,13 @@
     <!-- Unpaired State: Show logo -->
     <div class="pairing-section">
       {#if !showPairingQR}
-        <div class="logo-container" on:click={handlePairDevice} on:keypress={handlePairDevice} role="button" tabindex="0">
+        <div class="logo-container">
           <img src={logo} alt="Bold Bitcoin Logo" class="app-logo" />
           <p class="logo-hint">{pairingStatus}</p>
         </div>
+        <button class="btn-open" on:click={handlePairDevice}>
+          Open
+        </button>
       {/if}
 
       {#if showPairingQR}
@@ -326,25 +329,19 @@
     box-sizing: border-box;
   }
 
-  /* Center the logo container and add hover/focus bounce */
+  /* Center the logo container */
   .logo-container {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
     transition: transform 0.2s ease;
     padding: 24px;
     border-radius: 20px;
     background: #ffffff;
     border: 1px solid rgba(0,0,0,0.04);
     box-shadow: 0 6px 18px rgba(0,0,0,0.04);
-  }
-
-  .logo-container:focus,
-  .logo-container:hover {
-    outline: none;
-    transform: translateY(-4px);
+    margin-bottom: 20px;
   }
 
   .app-logo {
@@ -356,18 +353,6 @@
     transition: transform 200ms ease;
   }
 
-  .logo-container:hover .app-logo,
-  .logo-container:focus .app-logo {
-    animation: bounce 600ms;
-  }
-
-  @keyframes bounce {
-    0% { transform: translateY(0); }
-    30% { transform: translateY(-12px); }
-    50% { transform: translateY(0); }
-    65% { transform: translateY(-6px); }
-    100% { transform: translateY(0); }
-  }
 
   .pairing-section p {
     margin: 0 0 24px 0;
@@ -378,19 +363,12 @@
 
   .logo-container {
     text-align: center;
-    cursor: pointer;
     transition: all 0.2s ease;
     padding: 32px;
     border-radius: 20px;
     background: #ffffff;
     border: 1px solid rgba(0, 0, 0, 0.06);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
-  }
-
-  .logo-container:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-    border-color: rgba(0, 0, 0, 0.1);
   }
 
   .app-logo {
@@ -407,6 +385,32 @@
     font-weight: 600;
     margin: 0;
     letter-spacing: 0.3px;
+  }
+
+  .btn-open {
+    background: linear-gradient(135deg, #f7931a 0%, #e8820f 100%);
+    border: none;
+    color: #000000;
+    padding: 14px 32px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 16px rgba(247, 147, 26, 0.3);
+    letter-spacing: 0.3px;
+    min-width: 140px;
+  }
+
+  .btn-open:hover {
+    background: linear-gradient(135deg, #ffaa33 0%, #f7931a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(247, 147, 26, 0.4);
+  }
+
+  .btn-open:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(247, 147, 26, 0.3);
   }
 
   .qr-display {

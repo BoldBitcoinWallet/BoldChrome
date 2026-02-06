@@ -467,11 +467,14 @@ async function fetchWalletDataAndHandleStatus() {
 {#if !isPaired}
 	<!-- Unpaired State: Show pairing UI -->
 	<div class="pairing-container">
-		{#if pairingStep === 0}
-			<div class="pairing-logo" role="button" tabindex="0" on:click={handlePairDevice} on:keypress={handlePairDevice}>
-				<img src={logo} alt="Bold Bitcoin Logo" class="app-logo" width="120" height="120" />
-			</div>
-		{/if}
+	{#if pairingStep === 0}
+		<div class="pairing-logo">
+			<img src={logo} alt="Bold Bitcoin Logo" class="app-logo" width="120" height="120" />
+		</div>
+		<button class="btn-open" on:click={handlePairDevice}>
+			Open
+		</button>
+	{/if}
 
 		{#if pairingStep > 0}
 			{#if pairingStep !== 4}
@@ -1633,10 +1636,9 @@ async function fetchWalletDataAndHandleStatus() {
 		align-items: center;
 		justify-content: center;
 		align-self: center; /* ensure it is centered in parent */
-		cursor: pointer;
 		transition: transform 0.2s ease, box-shadow 0.2s ease;
 		position: relative; /* z-index will take effect */
-		margin: 0 auto; /* horizontal centering fallback */
+		margin: 0 auto 20px; /* horizontal centering fallback, add bottom margin for button */
 		z-index: 10;
 		background: var(--color-cardBackground);
 		padding: 24px;
@@ -1645,13 +1647,6 @@ async function fetchWalletDataAndHandleStatus() {
 		border: 1px solid var(--color-border);
 		width: max-content; /* shrink to contents */
 		max-width: 320px;
-	}
-
-	/* Hover / focus lift */
-	.pairing-logo:focus,
-	.pairing-logo:hover {
-		transform: translateY(-6px) scale(1.02);
-		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
 	} 
 
 	.app-logo {
@@ -1661,10 +1656,6 @@ async function fetchWalletDataAndHandleStatus() {
 		transition: transform 200ms ease;
 	}
 
-	.pairing-logo:hover .app-logo,
-	.pairing-logo:focus-visible .app-logo {
-		animation: bounce 600ms;
-	}
 
 	@keyframes bounce {
 		0% { transform: translateY(0); }
@@ -1674,21 +1665,12 @@ async function fetchWalletDataAndHandleStatus() {
 		100% { transform: translateY(0); }
 	}
 
-	.pairing-logo:hover {
-		transform: translateY(-6px) scale(1.02);
-		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
-	}
-
-	.pairing-logo:active {
-		transform: translateY(-3px) scale(0.98);
-	}
 
 	.app-logo {
 		display: block; /* ensure it centers inside its container */
 		margin: 0 auto 24px; /* center horizontally and keep spacing */
 		width: 120px;
 		height: 120px;
-		cursor: pointer;
 		transform-origin: center;
 		will-change: transform;
 		filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
@@ -1717,6 +1699,32 @@ async function fetchWalletDataAndHandleStatus() {
 		text-align: center;
 		margin-top: 8px;
 		letter-spacing: 0.3px;
+	}
+
+	.btn-open {
+		background: var(--color-primary);
+		color: var(--color-textOnPrimary);
+		border: none;
+		padding: 14px 32px;
+		border-radius: 12px;
+		font-size: 16px;
+		font-weight: 700;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+		letter-spacing: 0.3px;
+		min-width: 140px;
+	}
+
+	.btn-open:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+		filter: brightness(0.95);
+	}
+
+	.btn-open:active {
+		transform: translateY(0);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 	}
 
 	.qr-display {
