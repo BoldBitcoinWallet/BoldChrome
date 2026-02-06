@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en" style="width: 380px; min-height: 580px;">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<style>
+			html, body { height: 100%; }
+
+			body {
+				margin: 0;
+				padding: 0;
+				width: 380px;
+				min-height: 580px;
+				background: var(--color-background);
+				overflow-x: hidden;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+			}
+
+			/* Critical popup CSS: ensures pairing UI centers even before component CSS loads */
+			html body[data-sveltekit-preload-data="hover"] .pairing-container {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				width: 100%;
+				min-height: 100%;
+				padding: 24px 16px;
+				box-sizing: border-box;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .pairing-logo {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				margin: 0 auto;
+				padding: 12px; /* smaller padding so the logo isn't inside a large square */
+				border-radius: 12px;
+				width: max-content;
+				max-width: 320px;
+				background: transparent; /* remove visible white card */
+				border: none;
+				box-shadow: none;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .pairing-container .app-logo {
+				display: block;
+				margin: 0 auto 24px;
+				width: 120px;
+				height: 120px;
+				transform-origin: center;
+				will-change: transform;
+			}
+
+			/* Minimal keyframes + animation rules for popup pairing UI (ensures animations run before client CSS loads) */
+			@keyframes popup-bounce {
+				0% { transform: translateY(0); }
+				30% { transform: translateY(-12px); }
+				50% { transform: translateY(0); }
+				65% { transform: translateY(-6px); }
+				100% { transform: translateY(0); }
+			}
+
+			@keyframes popup-pulse {
+				0%, 100% { opacity: 1; transform: scale(1); }
+				50% { opacity: 0.85; transform: scale(1.04); }
+			}
+
+html body[data-sveltekit-preload-data="hover"] .pairing-container .pairing-logo:hover .app-logo,
+		html body[data-sveltekit-preload-data="hover"] .pairing-container .pairing-logo:focus-visible .app-logo {
+			animation: popup-bounce 600ms both;
+			will-change: transform;
+		}
+
+		html body[data-sveltekit-preload-data="hover"] .pairing-container .pairing-logo:not(:hover):not(:focus) .app-logo {
+				animation: popup-pulse 2s ease-in-out infinite both;
+				will-change: transform;
+			}
+
+			body[data-sveltekit-preload-data="hover"] {
+				/* Explicit fallback for SvelteKit preloaded body attribute */
+				width: 380px;
+				min-height: 580px;
+				height: 100%;
+				background: var(--color-background);
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+			}
+		</style>
+		%sveltekit.head%
+
+		<!-- Post-head critical overrides for popup (placed after injected CSS links so they win) -->
+		<style>
+			/* Intentionally minimal: component CSS owns visual styling */
+		</style>
+		<style>
+			/* Global pairing stepper fallback styles */
+			html body[data-sveltekit-preload-data="hover"] .pairing-container {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				width: 100%;
+				max-width: 380px;
+				min-height: 100%;
+				height: 100%;
+				padding: 24px 16px;
+				margin: 0 auto;
+				background: var(--color-background);
+				color: var(--color-text);
+				box-sizing: border-box;
+				gap: 16px;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .qr-display {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 20px;
+				background: var(--color-cardBackground);
+				padding: 28px 24px;
+				border-radius: 16px;
+				border: 1px solid var(--color-border);
+				box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+				width: 100%;
+				max-width: 360px;
+				box-sizing: border-box;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .qr-code {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 10px;
+				border-radius: 12px;
+				max-width: 100%;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .qr-code img {
+				width: 160px;
+				height: 160px;
+				max-width: 100%;
+				object-fit: contain;
+				display: block;
+				margin: 0 auto;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .pairing-status {
+				font-size: 18px;
+				font-weight: 700;
+				color: var(--color-text);
+				text-align: center;
+				margin: 0;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .instruction {
+				font-size: 14px;
+				color: var(--color-textSecondary);
+				text-align: center;
+				line-height: 1.6;
+				margin: 0;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .button-row {
+				display: flex;
+				gap: 12px;
+				width: 100%;
+				justify-content: center;
+				align-items: center;
+				margin-top: 16px;
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .btn-primary {
+				background: var(--color-primary);
+				color: var(--color-textOnPrimary);
+				border: none;
+				padding: 12px 20px;
+				border-radius: 10px;
+				cursor: pointer;
+				font-size: 14px;
+				font-weight: 600;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .btn-secondary {
+				background: var(--color-cardBackground);
+				color: var(--color-text);
+				border: 1px solid var(--color-border);
+				padding: 10px 18px;
+				border-radius: 10px;
+				cursor: pointer;
+				font-size: 14px;
+				font-weight: 600;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+			}
+
+			html body[data-sveltekit-preload-data="hover"] .btn-text {
+				background: none;
+				border: none;
+				color: var(--color-textSecondary);
+				cursor: pointer;
+				font-size: 13px;
+				font-weight: 600;
+				padding: 8px 14px;
+			}
+		</style>
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+
+		<!-- No final overrides: component CSS owns visual styling -->
+	</body>
+</html>
