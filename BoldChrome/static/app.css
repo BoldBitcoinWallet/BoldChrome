@@ -1,0 +1,1472 @@
+/**
+ * Critical popup styles (extension).
+ * Loaded from app.html so header, stepper, and pairing UI are styled before component CSS.
+ * Selector: html body[data-sveltekit-preload-data="hover"]
+ */
+
+/* Base */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 380px;
+  min-height: 580px;
+  background: var(--color-background);
+  color: var(--color-text);
+  overflow-x: hidden;
+  font-family: var(
+    --font-regular,
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif
+  );
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+
+body[data-sveltekit-preload-data="hover"] {
+  width: 380px;
+  min-height: 580px;
+  height: 100%;
+  background: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+/* ----- Popup root & content (so layout takes effect from app.css) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-height: 100%;
+  height: 100%;
+  flex: 1;
+  background: var(--color-background);
+  overflow: hidden;
+}
+html body[data-sveltekit-preload-data="hover"] .app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: auto;
+  width: 100%;
+  margin-top: 48px;
+  padding-top: var(--space-large);
+  min-height: 0;
+  box-sizing: border-box;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root.launch-screen
+  .app-content {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* ----- Header: logo left, theme right ----- */
+html body[data-sveltekit-preload-data="hover"] .app-header {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: 380px !important;
+  display: block !important;
+  z-index: 20;
+  min-height: 48px;
+  height: 48px;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+  box-sizing: border-box;
+  padding: 0 var(--space-medium);
+}
+
+html body[data-sveltekit-preload-data="hover"] .app-header-left {
+  position: absolute !important;
+  left: var(--space-medium) !important;
+  right: auto !important;
+  top: 50% !important;
+  transform: translateY(-50%);
+  display: inline-flex !important;
+  align-items: center;
+  width: auto !important;
+}
+
+html body[data-sveltekit-preload-data="hover"] .app-header-right {
+  position: absolute !important;
+  left: auto !important;
+  right: var(--space-medium) !important;
+  top: 50% !important;
+  transform: translateY(-50%);
+  display: inline-flex !important;
+  align-items: center;
+  gap: var(--space-small);
+  width: auto !important;
+}
+
+/* Generic header buttons: same as inner paired header .icon-btn (palette) */
+html body[data-sveltekit-preload-data="hover"] .app-header .theme-toggle,
+html body[data-sveltekit-preload-data="hover"] .app-header .refresh-btn,
+html
+  body[data-sveltekit-preload-data="hover"]
+  .app-header
+  .balance-visibility-btn,
+html body[data-sveltekit-preload-data="hover"] .app-header .unpair-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-small);
+  background: var(--color-cardBackground);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+  font-size: var(--font-size-lg);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .app-header
+  .theme-toggle:hover:not(:disabled),
+html
+  body[data-sveltekit-preload-data="hover"]
+  .app-header
+  .refresh-btn:hover:not(:disabled),
+html
+  body[data-sveltekit-preload-data="hover"]
+  .app-header
+  .balance-visibility-btn:hover,
+html body[data-sveltekit-preload-data="hover"] .app-header .unpair-btn:hover {
+  background: var(--color-border);
+  transform: scale(1.05);
+}
+html body[data-sveltekit-preload-data="hover"] .app-header .theme-toggle:active,
+html body[data-sveltekit-preload-data="hover"] .app-header .refresh-btn:active,
+html
+  body[data-sveltekit-preload-data="hover"]
+  .app-header
+  .balance-visibility-btn:active,
+html body[data-sveltekit-preload-data="hover"] .app-header .unpair-btn:active {
+  transform: scale(0.98);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .app-header
+  .refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .app-header
+  .refresh-btn.spinning {
+  animation: rotate 0.6s linear infinite;
+}
+/* Eye privacy icon: light mode = dark icon, dark mode = invert to light */
+html body[data-sveltekit-preload-data="hover"] .header-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  opacity: 0.9;
+}
+[data-theme="darkPolished"] .header-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+html body[data-sveltekit-preload-data="hover"] .balance-visibility-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  opacity: 0.9;
+}
+[data-theme="darkPolished"] .balance-visibility-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+
+/* Dark mode: same logo, inverted/white (header + pairing) */
+[data-theme="darkPolished"] .header-logo {
+  filter: brightness(0) invert(1);
+}
+[data-theme="darkPolished"] .app-logo {
+  filter: brightness(0) invert(1);
+}
+[data-theme="darkPolished"] .pairing-logo .app-logo {
+  filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+/* ----- Stepper on top of binding flow (sticky at top, above cards) ----- */
+html body[data-sveltekit-preload-data="hover"] .bind-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  max-width: 360px;
+  flex-shrink: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .stepper-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 0 var(--space-large) 0;
+  flex-shrink: 0;
+  background: var(--color-background);
+  padding: var(--space-small) 0;
+  width: 100%;
+}
+/* Pairing body: centered on launch, start-aligned when steps active */
+html body[data-sveltekit-preload-data="hover"] .pairing-body {
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-body:not(.steps-active) {
+  justify-content: center;
+}
+html body[data-sveltekit-preload-data="hover"] .pairing-body.steps-active {
+  padding-top: 0;
+}
+
+/* ----- Get Started launch screen: title, subtitle, Bind wallet button (all centered) ----- */
+html body[data-sveltekit-preload-data="hover"] .pairing-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--space-large) var(--space-large);
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+html body[data-sveltekit-preload-data="hover"] .pairing-start .pairing-logo {
+  cursor: default;
+  margin-bottom: var(--space-small);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-start
+  .pairing-logo:hover {
+  transform: none;
+  box-shadow: none;
+}
+html body[data-sveltekit-preload-data="hover"] .pairing-start .app-logo {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+  animation: none;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-start
+  .pairing-logo
+  .app-logo {
+  animation: none;
+}
+html body[data-sveltekit-preload-data="hover"] .pairing-get-started {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin: 0 0 var(--space-small) 0;
+  line-height: 1.25;
+  text-align: center;
+}
+html body[data-sveltekit-preload-data="hover"] .pairing-cta {
+  color: var(--color-textSecondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+  margin: 0 0 var(--space-large) 0;
+  text-align: center;
+  max-width: 280px;
+}
+html body[data-sveltekit-preload-data="hover"] .pairing-bind-btn {
+  width: 100%;
+  max-width: 240px;
+  min-height: 44px;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-medium);
+  background: var(--color-primary);
+  color: var(--color-textOnPrimary);
+  border: none;
+  cursor: pointer;
+  padding: var(--space-medium) var(--space-large);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* ----- Stepper: fixed width so 1 and 2 aligned on every step; green = done only ----- */
+html body[data-sveltekit-preload-data="hover"] .stepper.stepper-dots {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 96px;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+html body[data-sveltekit-preload-data="hover"] .stepper-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: var(--color-cardBackground);
+  color: var(--color-textSecondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+html body[data-sveltekit-preload-data="hover"] .stepper-dot.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-textOnPrimary);
+}
+
+/* Done = primary when step is completed (overrides .active if both set) */
+html body[data-sveltekit-preload-data="hover"] .stepper-dot.done {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-textOnPrimary);
+}
+
+html body[data-sveltekit-preload-data="hover"] .stepper-line {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 2px;
+  background: var(--color-border);
+  margin: 0 var(--space-small);
+}
+
+html body[data-sveltekit-preload-data="hover"] .stepper-line.done {
+  background: var(--color-primary);
+}
+
+html body[data-sveltekit-preload-data="hover"] .step-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  margin: 0 0 var(--space-small) 0;
+  text-align: center;
+  line-height: 1.3;
+}
+
+html body[data-sveltekit-preload-data="hover"] .step-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-medium);
+  width: 100%;
+  padding: 0 var(--space-large);
+  text-align: center;
+}
+
+/* ----- Pairing container: centered on launch, start-aligned when steps active ----- */
+html body[data-sveltekit-preload-data="hover"] .pairing-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 380px;
+  min-height: 100%;
+  height: 100%;
+  padding: var(--space-large) var(--space-large);
+  margin: 0 auto;
+  background: var(--color-background);
+  color: var(--color-text);
+  box-sizing: border-box;
+  gap: var(--space-large);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-container:not(.steps-active) {
+  justify-content: center;
+}
+html body[data-sveltekit-preload-data="hover"] .pairing-container.steps-active {
+  padding-top: 0;
+}
+
+html body[data-sveltekit-preload-data="hover"] .pairing-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  padding: var(--space-medium);
+  border-radius: var(--radius-large);
+  width: max-content;
+  max-width: 320px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+html body[data-sveltekit-preload-data="hover"] .pairing-container .app-logo {
+  display: block;
+  margin: 0 auto var(--space-large);
+  width: 120px;
+  height: 120px;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* ----- Keyframes ----- */
+@keyframes popup-bounce {
+  0% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-12px);
+  }
+  50% {
+    transform: translateY(0);
+  }
+  65% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes popup-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-container
+  .pairing-logo:hover
+  .app-logo,
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-container
+  .pairing-logo:focus-visible
+  .app-logo {
+  animation: popup-bounce 600ms both;
+  will-change: transform;
+}
+
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-container
+  .pairing-logo:not(:hover):not(:focus)
+  .app-logo {
+  animation: popup-pulse 2s ease-in-out infinite both;
+  will-change: transform;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .pairing-container
+  .pairing-start
+  .app-logo {
+  width: 80px;
+  height: 80px;
+  animation: none;
+}
+
+/* ----- QR display & flow (vertical stack, start-aligned) ----- */
+html body[data-sveltekit-preload-data="hover"] .qr-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-large);
+  background: var(--color-cardBackground);
+  padding: var(--space-extraLarge) var(--space-large);
+  border-radius: var(--radius-large);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  width: 100%;
+  max-width: 360px;
+  box-sizing: border-box;
+}
+
+html body[data-sveltekit-preload-data="hover"] .qr-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-medium);
+  border-radius: var(--radius-large);
+  max-width: 100%;
+}
+
+html body[data-sveltekit-preload-data="hover"] .qr-code img {
+  width: 160px;
+  height: 160px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+html body[data-sveltekit-preload-data="hover"] .pairing-status {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-bold);
+  color: var(--color-text);
+  text-align: center;
+  margin: 0;
+}
+
+html body[data-sveltekit-preload-data="hover"] .instruction {
+  font-size: var(--font-size-base);
+  color: var(--color-textSecondary);
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+html body[data-sveltekit-preload-data="hover"] .button-row {
+  display: flex;
+  gap: var(--space-medium);
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+  margin-top: var(--space-large);
+}
+
+html body[data-sveltekit-preload-data="hover"] .btn-primary {
+  background: var(--color-primary);
+  color: var(--color-textOnPrimary);
+  border: none;
+  padding: var(--space-medium) var(--space-large);
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-bold);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+html body[data-sveltekit-preload-data="hover"] .btn-secondary {
+  background: var(--color-cardBackground);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: var(--space-medium) var(--space-large);
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-bold);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+html body[data-sveltekit-preload-data="hover"] .btn-text {
+  background: none;
+  border: none;
+  color: var(--color-textSecondary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-bold);
+  padding: var(--space-small) var(--space-medium);
+}
+
+/* ----- Camera / scanner screen (top-aligned, match qr-display card) ----- */
+html body[data-sveltekit-preload-data="hover"] .scanner-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: var(--space-large) var(--space-large) var(--space-large);
+  background: var(--color-background);
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+
+html body[data-sveltekit-preload-data="hover"] .scanner-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-large);
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-extraLarge) var(--space-large);
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+}
+
+html body[data-sveltekit-preload-data="hover"] .scanner-step-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-textSecondary);
+  margin: 0 0 var(--space-small) 0;
+  text-align: center;
+}
+
+/* ----- Paired state: wallet UI (compact, no overflow) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .wallet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 380px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  color: var(--color-text);
+  background: var(--color-background);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .wallet-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 var(--space-medium) var(--space-medium);
+  box-sizing: border-box;
+}
+
+/* ----- Balance card (compact) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card {
+  margin-top: var(--space-small);
+  margin-bottom: 0;
+  padding: var(--space-medium);
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
+  min-width: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-small);
+  min-height: 44px;
+  min-width: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .balance-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+  color: var(--color-textSecondary);
+  font-size: var(--font-size-base);
+}
+
+/* Action row: Send / Receive */
+html body[data-sveltekit-preload-data="hover"] .popup-root .actions-row {
+  display: flex;
+  gap: var(--space-medium);
+  margin-top: var(--space-medium);
+  margin-bottom: 0;
+  align-items: stretch;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-small);
+  min-height: 48px;
+  padding: 0 var(--space-large);
+  border: none;
+  border-radius: var(--radius-medium);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    transform 0.2s,
+    filter 0.2s,
+    box-shadow 0.2s;
+  color: var(--color-textOnPrimary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-btn {
+  background: var(--color-accent);
+  color: var(--color-textOnPrimary);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-btn
+  .action-btn-icon,
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .receive-btn
+  .action-btn-icon {
+  filter: brightness(0) invert(1);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .receive-btn {
+  background: var(--color-secondary);
+  color: var(--color-textOnPrimary);
+}
+
+html body[data-sveltekit-preload-data="hover"] .popup-root .balance {
+  padding: var(--space-large) var(--space-large);
+  background: var(--color-cardBackground);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .balance-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .amount {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.5px;
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .amount.placeholder {
+  color: var(--color-disabled);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .amount.error {
+  color: var(--color-error);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .unit {
+  color: var(--color-textSecondary);
+  font-weight: var(--font-weight-medium);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .fiat {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .fiat.placeholder {
+  color: var(--color-disabled);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .fiat.error {
+  color: var(--color-error);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-selector {
+  margin-top: var(--space-small);
+  min-width: 0;
+  width: 100%;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .address-selector-inner {
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-toggle {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  min-width: 0;
+  overflow: hidden;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-display {
+  color: var(--color-text);
+  overflow: hidden;
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .dropdown-toggle:hover {
+  opacity: 0.9;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-arrow {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .sync-addresses {
+  background: var(--color-primary);
+  color: var(--color-textOnPrimary);
+  border-radius: var(--radius-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-dropdown {
+  background: var(--color-cardBackground);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--color-secondary);
+  border-radius: 0 0 var(--radius-medium) var(--radius-medium);
+  border-color: var(--color-secondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-header {
+  background: var(--color-background);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-secondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-item {
+  background: var(--color-cardBackground);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-item:hover {
+  background: var(--color-background);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .address-item.active {
+  background: var(--color-background);
+  border-left: 3px solid var(--color-primary);
+}
+/* Dark mode: address selector, dropdown, list items */
+[data-theme="darkPolished"] .popup-root .address-selector-inner {
+  background: var(--color-cardBackground);
+  border-color: var(--color-border);
+}
+[data-theme="darkPolished"] .popup-root .address-selector .address-type-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+[data-theme="darkPolished"] .popup-root .address-dropdown {
+  background: var(--color-cardBackground);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--color-secondary);
+  border-radius: 0 0 var(--radius-medium) var(--radius-medium);
+  border-color: var(--color-secondary);
+}
+[data-theme="darkPolished"] .popup-root .dropdown-header {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+[data-theme="darkPolished"] .popup-root .address-item {
+  background: var(--color-cardBackground);
+  border-bottom-color: var(--color-border);
+  color: var(--color-text);
+}
+[data-theme="darkPolished"] .popup-root .address-item:hover,
+[data-theme="darkPolished"] .popup-root .address-item.active {
+  background: var(--color-background);
+}
+[data-theme="darkPolished"] .popup-root .address-item .address-type-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-text {
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-value,
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-path {
+  color: var(--color-textSecondary);
+  font-family: var(--font-mono);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-balance {
+  color: var(--color-success);
+  font-family: var(--font-mono);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .actions {
+  background: var(--color-cardBackground);
+  border-bottom: 1px solid var(--color-border);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .btn {
+  background: var(--color-background);
+  color: var(--color-text);
+  border-radius: var(--radius-medium);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .btn.primary {
+  background: var(--color-primary);
+  color: var(--color-textOnPrimary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .btn.send {
+  background: var(--color-accent);
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .btn.receive {
+  background: var(--color-secondary);
+  color: var(--color-textOnPrimary);
+}
+/* ----- Tx list (aligned with popup.html structure: .tx-item, .tx-item-btn, .tx-status-*, .tx-amount) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list h2 {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-empty {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-item-btn {
+  background: var(--color-cardBackground);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-item-btn:hover {
+  background: var(--color-background);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-status-text {
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-amount.in {
+  color: var(--color-secondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-amount.out {
+  color: var(--color-bitcoinOrange);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-unit {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-address-label {
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-fiat,
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-id-label,
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-time {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-id-value {
+  color: var(--color-text);
+}
+/* Dark mode: tx list icons */
+[data-theme="darkPolished"] .popup-root .tx-list .tx-status-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+/* ----- Tx list paging (Load more / No more) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-medium) 0;
+  margin-top: var(--space-small);
+  border-top: 1px solid var(--color-border);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer-loading,
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer-end {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-load-more {
+  padding: var(--space-small) var(--space-medium);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+  background: var(--color-cardBackground);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-load-more:hover {
+  background: var(--color-background);
+  border-color: var(--color-primary);
+}
+/* ----- PIN lock / Set PIN screens ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: var(--space-large);
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen.pin-loading {
+  gap: var(--space-medium);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-loading-text {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 300px;
+  padding: var(--space-extraLarge) var(--space-large);
+  gap: 0;
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  color: var(--color-text);
+  box-sizing: border-box;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-logo {
+  display: block;
+  margin-bottom: var(--space-medium);
+  flex-shrink: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-title {
+  margin: 0 0 var(--space-small);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  text-align: center;
+  line-height: 1.25;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-hint {
+  margin: 0 0 var(--space-large);
+  font-size: var(--font-size-sm);
+  color: var(--color-textSecondary);
+  text-align: center;
+  line-height: 1.45;
+  max-width: 100%;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-hint.pin-hint-long {
+  max-width: 36ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  gap: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-form.pin-form-confirm {
+  gap: var(--space-medium);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-medium) var(--space-large);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+  background: var(--color-inputBackground);
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  letter-spacing: 0.25em;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input::placeholder {
+  color: var(--color-textSecondary);
+  opacity: 0.8;
+  letter-spacing: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-error {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+  text-align: center;
+  min-height: 1.25em;
+  line-height: 1.3;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-submit {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-small);
+  padding: var(--space-medium) var(--space-large);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-medium);
+}
+/* ----- Mempool preference screen (after pairing) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-preference-card {
+  max-width: 320px;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-preference-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-small);
+  margin-top: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-input {
+  letter-spacing: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-preference-actions {
+  display: flex;
+  gap: var(--space-medium);
+  margin-top: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-skip-btn,
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-save-btn {
+  flex: 1;
+  min-height: 44px;
+}
+/* ----- Mempool modal (Change provider) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-medium);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-card {
+  width: 100%;
+  max-width: 320px;
+  padding: var(--space-large);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-medium);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-title {
+  margin: 0 0 var(--space-small);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-medium) var(--space-large);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+  background: var(--color-inputBackground);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+  justify-content: space-between;
+  align-items: center;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-actions .btn-secondary,
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-actions .btn-primary {
+  min-height: 44px;
+  padding: var(--space-medium) var(--space-large);
+  width: 30%;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-reset-btn {
+  min-height: 44px;
+  padding: var(--space-medium) var(--space-large);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .header-title-text {
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .lock-btn {
+  background: var(--color-cardBackground);
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .lock-btn:hover {
+  background: var(--color-border);
+}
+[data-theme="darkPolished"] .popup-root .lock-icon {
+  filter: brightness(0) invert(1);
+}
+/* ----- Footer: provider (left), Change (right) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-small) var(--space-medium);
+  padding: var(--space-medium);
+  min-height: 40px;
+  color: var(--color-textSecondary);
+  background: var(--color-background);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  box-sizing: border-box;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-mempool-label {
+  color: var(--color-textSecondary);
+  flex-shrink: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-mempool-value {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+  flex-shrink: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn {
+  padding: var(--space-small) var(--space-medium);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+  background: var(--color-cardBackground);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn:hover {
+  background: var(--color-border);
+  border-color: var(--color-primary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-link {
+  width: 100%;
+  text-align: center;
+  color: var(--color-textSecondary);
+  text-decoration: none;
+  order: 3;
+  font-size: var(--font-size-xs);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .footer-link:hover {
+  color: var(--color-primary);
+}
+
+/* ----- Modals (backdrop + card base) ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .modal {
+  background: var(--color-modalBackdrop);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card {
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+}
+/* Shared modal header (send + receive) */
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .receive-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: var(--space-large);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .receive-modal-title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .receive-modal-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.8;
+  border-radius: var(--radius-small);
+  transition: opacity 0.2s;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .receive-modal-close:hover {
+  opacity: 1;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card h3 {
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card label {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card input {
+  background: var(--color-inputBackground);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .modal-card
+  input:focus {
+  border-color: var(--color-primary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .msg {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .address {
+  background: var(--color-inputBackground);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .empty {
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .qr-container {
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .qr-instructions {
+  color: var(--color-textSecondary);
+}
+
+/* ----- Send modal (balance, fiat, address + scan) – design tokens ----- */
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-modal-card {
+  width: 90%;
+  max-width: 340px;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: var(--space-large);
+  padding-bottom: var(--space-large);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-small) var(--space-medium);
+  margin-bottom: var(--space-large);
+  padding: var(--space-medium);
+  background: var(--color-inputBackground);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-textSecondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-value {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-fiat {
+  font-size: var(--font-size-sm);
+  color: var(--color-textSecondary);
+  margin-left: auto;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-fiat-equivalent {
+  margin: -6px 0 var(--space-medium) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-address-row {
+  display: flex;
+  gap: var(--space-small);
+  align-items: stretch;
+  margin-bottom: var(--space-medium);
+  min-width: 0;
+  max-width: 100%;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-address-input {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: 0 !important;
+  box-sizing: border-box;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-scan-qr-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-small);
+  padding: var(--space-small);
+  min-width: 36px;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+  background: var(--color-inputBackground);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+  box-sizing: border-box;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-scan-qr-btn
+  .send-scan-qr-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 4.5em;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-scan-qr-btn:hover {
+  background: var(--color-disabled);
+  border-color: var(--color-primary);
+}

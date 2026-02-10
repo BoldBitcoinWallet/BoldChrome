@@ -1,0 +1,44 @@
+{
+	"name": "boldchrome",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"icons": "sips -z 16 16 src/lib/assets/bold-icon.png --out static/icons/icon16.png && sips -z 48 48 src/lib/assets/bold-icon.png --out static/icons/icon48.png && sips -z 128 128 src/lib/assets/bold-icon.png --out static/icons/icon128.png",
+		"build": "vite build && node fix-build.js",
+		"build:prod": "vite build --mode production && node fix-build.js",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"verify": "node verify-setup.cjs",
+		"test": "echo 'Add test script here' && exit 0"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/kit": "^2.49.1",
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@types/chrome": "^0.1.36",
+		"@types/crypto-js": "^4.2.2",
+		"@types/qrcode": "^1.5.6",
+		"svelte": "^5.45.6",
+		"svelte-check": "^4.3.4",
+		"typescript": "^5.9.3",
+		"vite": "^7.2.6",
+		"vite-plugin-top-level-await": "^1.6.0",
+		"vite-plugin-wasm": "^3.5.0"
+	},
+	"dependencies": {
+		"@noble/hashes": "^2.0.1",
+		"@noble/secp256k1": "^3.0.0",
+		"bip32": "^5.0.0",
+		"bitcoinjs-lib": "^7.0.1",
+		"crypto-js": "^4.2.0",
+		"html5-qrcode": "^2.3.8",
+		"jsqr": "^1.4.0",
+		"qrcode": "^1.5.4",
+		"socket.io-client": "^4.7.0",
+		"sveltekit-adapter-chrome-extension": "^2.0.1"
+	}
+}
