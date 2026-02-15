@@ -74,8 +74,26 @@ export interface FeeEstimate {
   [blocks: string]: number; // blocks as key, fee rate as value
 }
 
+/** Mempool.space /v1/fees/recommended response (sat/vB). */
+export interface RecommendedFees {
+  fastestFee: number;
+  halfHourFee: number;
+  hourFee: number;
+  economyFee?: number;
+  minimumFee?: number;
+}
+
 const DEFAULT_MAINNET_API = 'https://mempool.space/api';
 const DEFAULT_TESTNET_API = 'https://mempool.space/testnet/api';
+const FETCH_TIMEOUT_MS = 5000;
+
+function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timeoutId)
+  );
+}
 
 class BlockchainService {
   private baseUrl = DEFAULT_MAINNET_API;
@@ -136,7 +154,7 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/address/${address}`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -188,7 +206,7 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/address/${address}/utxo`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -217,7 +235,7 @@ class BlockchainService {
     }
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -245,7 +263,7 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/tx/${txid}`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -270,7 +288,7 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/tx/${txid}/hex`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -284,20 +302,21 @@ class BlockchainService {
   }
 
   /**
-   * Get fee estimates
+   * Get recommended fee estimates (economy, 1hr, 30m, fast) in sat/vB.
    */
-  async getFeeEstimates(): Promise<FeeEstimate> {
+  async getFeeEstimates(): Promise<RecommendedFees> {
     console.log('[Blockchain] Fetching fee estimates');
     const url = `${this.getBaseUrl()}/v1/fees/recommended`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
-      return data;
+      console.log('[Blockchain] Fee estimates:', data);
+      return data as RecommendedFees;
     } catch (error) {
       console.error('[Blockchain] Error fetching fee estimates:', error);
       throw error;
@@ -312,7 +331,7 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/tx`;
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/plain'
@@ -343,7 +362,7 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/blocks/tip/height`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -371,7 +390,7 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/v1/prices`;
 
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -385,7 +404,7 @@ class BlockchainService {
     } catch (error) {
       console.error('[Blockchain] Error fetching Bitcoin prices:', error);
       try {
-        const fallback = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+        const fallback = await fetchWithTimeout('https://api.coinbase.com/v2/prices/BTC-USD/spot');
         const fallbackData = await fallback.json();
         const usd = parseFloat(fallbackData?.data?.amount ?? 0);
         return usd ? { USD: usd } : {};

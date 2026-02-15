@@ -666,7 +666,7 @@ class QRService {
       console.log('[QR] Attempting relay lookup:', url);
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      const timeout = setTimeout(() => controller.abort(), 5000);
 
       try {
         const resp = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }, signal: controller.signal });

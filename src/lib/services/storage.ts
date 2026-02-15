@@ -30,6 +30,9 @@ export interface StorageData {
 
   // PIN lock (extension)
   pinHash?: string; // SHA-256 hash of PIN, never store raw PIN
+
+  // First-load camera permission prompt (extension)
+  cameraPermissionChecked?: boolean;
 }
 
 /**
