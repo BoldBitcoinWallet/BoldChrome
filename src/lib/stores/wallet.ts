@@ -1,7 +1,9 @@
 import { writable, derived } from 'svelte/store';
 import { storage } from '../services/storage';
 import { blockchain } from '../services/blockchain';
-import { hdWallet, type DerivedAddress as HDDerivedAddress } from '../services/hdwallet';
+import { hdWallet, type DerivedAddress as HDDerivedAddress, type HdState, GAP_LIMIT } from '../services/hdwallet';
+
+const HD_DISCOVERY_STALE_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export interface Transaction {
   txid: string;
@@ -17,42 +19,54 @@ export interface Transaction {
 
 export interface DerivedAddress {
   address: string;
-  path: string; // BIP44 derivation path (e.g., m/84'/0'/0'/0/0)
-  index: number; // Address index
-  type: 'legacy' | 'segwit-nested' | 'segwit-native'; // Address type
-  label?: string; // Optional user-defined label
-  balance?: string; // Cached balance in BTC
-  lastUsed?: number; // Timestamp of last transaction
+  path: string;
+  index: number;
+  type: 'legacy' | 'segwit-nested' | 'segwit-native';
+  chain?: 'receive' | 'change';
+  label?: string;
+  balance?: string;
+  lastUsed?: number;
+}
+
+export interface TaggedUTXO {
+  txid: string;
+  vout: number;
+  value: number;
+  address: string;
+  derivationPath: string;
+  status: { confirmed: boolean; block_height?: number };
 }
 
 export interface WalletState {
-  // Identity
-  address: string; // Currently selected address
-  addresses: DerivedAddress[]; // All derived addresses from public key
+  address: string;
+  addresses: DerivedAddress[];
   network: 'mainnet' | 'testnet';
 
-  // HD Wallet Public Key (for address derivation)
-  publicKey?: string; // Extended public key (xpub/ypub/zpub)
-  chainCode?: string; // Chain code for HD derivation
+  publicKey?: string;
+  chainCode?: string;
 
-  // Balance
+  // HD state
+  hdState?: HdState;
+
+  // Aggregate balance (across all HD addresses)
   btc: string;
   usd: string;
   lastBalanceUpdate: number;
 
-  // Transactions
+  // Merged transactions from all addresses
   transactions: Transaction[];
   lastTxUpdate: number;
   hasMoreTransactions: boolean;
 
-  // UI state
+  // Tagged UTXOs (each knows its source address + derivation path)
+  utxos: TaggedUTXO[];
+
   isLoading: boolean;
   isLoadingMoreTransactions: boolean;
   error?: string;
 
-  // Watch-only configuration
   isWatchOnly: boolean;
-  pairedDevices?: string[]; // Mobile device IDs that can sign
+  pairedDevices?: string[];
 }
 
 const initialState: WalletState = {
@@ -65,9 +79,10 @@ const initialState: WalletState = {
   transactions: [],
   lastTxUpdate: 0,
   hasMoreTransactions: true,
+  utxos: [],
   isLoading: false,
   isLoadingMoreTransactions: false,
-  isWatchOnly: true, // Chrome extension is always watch-only
+  isWatchOnly: true,
 };
 
 /**
@@ -92,6 +107,7 @@ export async function resetWallet() {
     'chainCode',
     'address',
     'addresses',
+    'hdState',
     'network',
     'pairedDevices',
     'pinHash'
@@ -102,9 +118,11 @@ export async function resetWallet() {
     addresses: [],
     publicKey: undefined,
     chainCode: undefined,
+    hdState: undefined,
     btc: '0',
     usd: '0',
     transactions: [],
+    utxos: [],
     isLoading: false,
     error: undefined
   });
@@ -120,6 +138,8 @@ export async function initializeWalletStore() {
   const addressesJson = await storage.get<string>('addresses');
   const addresses: DerivedAddress[] = addressesJson ? JSON.parse(addressesJson) : [];
   const network = await storage.get<string>('network') as 'mainnet' | 'testnet';
+  const hdStateJson = await storage.get<string>('hdState');
+  const hdState: HdState | undefined = hdStateJson ? JSON.parse(hdStateJson) : undefined;
 
   walletStore.update(state => ({
     ...state,
@@ -127,6 +147,7 @@ export async function initializeWalletStore() {
     publicKey: publicKey ?? undefined,
     chainCode: chainCode ?? undefined,
     addresses,
+    hdState,
     network: network || 'mainnet'
   }));
 }
@@ -347,6 +368,7 @@ export async function updateWalletFromPairing(data: {
 /**
  * Derive initial addresses from public key.
  * Exactly 3 addresses, each on first path (../0/0): native segwit, nested segwit, legacy.
+ * Used as a quick bootstrap before full HD discovery completes.
  */
 export async function deriveInitialAddresses() {
   const publicKey = await storage.get<string>('publicKey');
@@ -361,59 +383,183 @@ export async function deriveInitialAddresses() {
   try {
     console.log('[Wallet] Deriving 3 addresses (first derivation: native segwit, nested segwit, legacy)...');
 
-    // One address per type at index 0
     const derived = hdWallet.deriveAllTypes(
       { publicKey, chainCode, network },
-      1 // 1 address per type (index 0 only)
+      1
     );
 
-    // Order: 1) native segwit (default), 2) nested segwit, 3) legacy
     const addresses: DerivedAddress[] = [
-      ...derived.segwitNative.map(addr => ({ ...addr, type: 'segwit-native' as const })),
-      ...derived.segwitNested.map(addr => ({ ...addr, type: 'segwit-nested' as const })),
-      ...derived.legacy.map(addr => ({ ...addr, type: 'legacy' as const }))
+      ...derived.segwitNative.map(addr => ({ ...addr, type: 'segwit-native' as const, chain: 'receive' as const })),
+      ...derived.segwitNested.map(addr => ({ ...addr, type: 'segwit-nested' as const, chain: 'receive' as const })),
+      ...derived.legacy.map(addr => ({ ...addr, type: 'legacy' as const, chain: 'receive' as const }))
     ];
 
     console.log('[Wallet] Derived', addresses.length, 'addresses');
-
     await updateAddresses(addresses);
 
-    // Default to native segwit (first in list)
     if (derived.segwitNative.length > 0) {
       await setAddress(derived.segwitNative[0].address);
     }
+
+    // Kick off full HD discovery in the background
+    runHdDiscovery().catch(err =>
+      console.error('[Wallet] Background HD discovery error:', err)
+    );
   } catch (error) {
     console.error('[Wallet] Address derivation error:', error);
     throw new Error(`Failed to derive addresses: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
-/** Map raw mempool.space tx to our Transaction format (shared by refresh and fetchMore). */
+/**
+ * Run gap-limit HD discovery for the active address type.
+ * Scans the blockchain for used addresses, updates hdState & address list.
+ */
+/**
+ * @returns `true` if discovery actually ran (and refreshed data), `false` if skipped.
+ */
+export async function runHdDiscovery(force = false): Promise<boolean> {
+  const publicKey = await storage.get<string>('publicKey');
+  const chainCode = await storage.get<string>('chainCode');
+  const network = (await storage.get<string>('network') as 'mainnet' | 'testnet') || 'mainnet';
+  if (!publicKey || !chainCode) return false;
+
+  const hdStateJson = await storage.get<string>('hdState');
+  const existing: HdState | null = hdStateJson ? JSON.parse(hdStateJson) : null;
+
+  if (!force && existing?.discoveryDone) {
+    const age = Date.now() - (existing.discoveryLastAt || 0);
+    if (age < HD_DISCOVERY_STALE_MS) {
+      console.log('[Wallet] HD discovery still fresh, skipping');
+      return false;
+    }
+  }
+
+  const addressType = existing?.addressType || 'segwit-native';
+  const config = { publicKey, chainCode, network };
+
+  console.log('[Wallet] Running HD discovery for', addressType);
+
+  const getStats = async (address: string) => {
+    const stats = await blockchain.getAddressStats(address);
+    return { tx_count: stats.chain_stats.tx_count + stats.mempool_stats.tx_count };
+  };
+
+  const result = await hdWallet.discoverIndexes(config, addressType, getStats);
+
+  const newHdState: HdState = {
+    externalIndex: result.externalNext,
+    changeIndex: result.changeNext,
+    maxUsedExternal: result.maxUsedExternal,
+    discoveryDone: true,
+    discoveryLastAt: Date.now(),
+    addressType,
+  };
+
+  await storage.set('hdState', JSON.stringify(newHdState));
+
+  // Derive the full address set from discovered indexes
+  const externalEnd = Math.max(result.externalNext, result.maxUsedExternal);
+  const changeEnd = result.changeNext;
+  const allAddrs = hdWallet.deriveHdAddresses(config, addressType, externalEnd, changeEnd > 0 ? changeEnd - 1 : -1);
+
+  const addresses: DerivedAddress[] = allAddrs.map(a => ({
+    ...a,
+    type: addressType,
+  }));
+
+  await updateAddresses(addresses);
+
+  // Set active address to current receive address
+  if (result.externalNext >= 0) {
+    const [receiveAddr] = hdWallet.deriveAddresses(config, addressType, 1, result.externalNext, 0);
+    if (receiveAddr) {
+      await storage.set('address', receiveAddr.address);
+      walletStore.update(s => ({ ...s, address: receiveAddr.address }));
+    }
+  }
+
+  walletStore.update(s => ({ ...s, hdState: newHdState }));
+  console.log('[Wallet] HD discovery complete:', newHdState);
+
+  // Re-aggregate balance/txs/UTXOs now that the full address set is known
+  await refreshWalletData();
+  return true;
+}
+
+/**
+ * Get the current receive address (at externalIndex).
+ */
+export function getCurrentReceiveAddress(): DerivedAddress | null {
+  const state = getStoreValue();
+  if (!state.publicKey || !state.chainCode || !state.hdState) return null;
+  const config = { publicKey: state.publicKey, chainCode: state.chainCode, network: state.network };
+  const [addr] = hdWallet.deriveAddresses(config, state.hdState.addressType, 1, state.hdState.externalIndex, 0);
+  return addr ? { ...addr, type: state.hdState.addressType, chain: 'receive' } : null;
+}
+
+/**
+ * Get the next change address (at changeIndex).
+ */
+export function getNextChangeAddress(): DerivedAddress | null {
+  const state = getStoreValue();
+  if (!state.publicKey || !state.chainCode || !state.hdState) return null;
+  const config = { publicKey: state.publicKey, chainCode: state.chainCode, network: state.network };
+  const [addr] = hdWallet.deriveAddresses(config, state.hdState.addressType, 1, state.hdState.changeIndex, 1);
+  return addr ? { ...addr, type: state.hdState.addressType, chain: 'change' } : null;
+}
+
+function getStoreValue(): WalletState {
+  let val: WalletState = initialState;
+  walletStore.subscribe(s => { val = s; })();
+  return val;
+}
+
+/** Map raw mempool.space tx to our Transaction format (single-address, for fetchMore). */
 function mapRawTxToTransaction(tx: any, currentAddress: string): Transaction {
+  return mapRawTxMultiAddress(tx, new Set([currentAddress]));
+}
+
+/** Map raw mempool.space tx considering multiple wallet addresses. */
+function mapRawTxMultiAddress(tx: any, walletAddresses: Set<string>): Transaction {
   const receivedByUs = tx.vout
-    .filter((v: any) => v.scriptpubkey_address === currentAddress)
+    .filter((v: any) => walletAddresses.has(v.scriptpubkey_address))
     .reduce((sum: number, v: any) => sum + v.value, 0);
 
   const sentFromUs = tx.vin
-    .filter((v: any) => v.prevout?.scriptpubkey_address === currentAddress)
+    .filter((v: any) => walletAddresses.has(v.prevout?.scriptpubkey_address))
     .reduce((sum: number, v: any) => sum + (v.prevout?.value || 0), 0);
 
   const sentToOthers = tx.vout
-    .filter((v: any) => v.scriptpubkey_address && v.scriptpubkey_address !== currentAddress)
+    .filter((v: any) => v.scriptpubkey_address && !walletAddresses.has(v.scriptpubkey_address))
     .reduce((sum: number, v: any) => sum + v.value, 0);
 
   const netAmount = receivedByUs - sentFromUs;
-  const type: Transaction['type'] = netAmount > 0 ? 'receive' : 'send';
+
+  // If all inputs and outputs belong to us, it's a consolidation
+  const allInputsOurs = tx.vin.every((v: any) => walletAddresses.has(v.prevout?.scriptpubkey_address));
+  const allOutputsOurs = tx.vout.every((v: any) => walletAddresses.has(v.scriptpubkey_address));
+  const isConsolidation = allInputsOurs && allOutputsOurs;
+
+  const type: Transaction['type'] = isConsolidation
+    ? 'consolidation'
+    : netAmount > 0
+      ? 'receive'
+      : 'send';
 
   const amount =
-    type === 'receive'
+    type === 'consolidation'
       ? receivedByUs
-      : sentToOthers > 0
-        ? sentToOthers
-        : Math.abs(netAmount);
+      : type === 'receive'
+        ? receivedByUs
+        : sentToOthers > 0
+          ? sentToOthers
+          : Math.abs(netAmount);
 
-  const recipientVout = tx.vout?.find((v: any) => v.scriptpubkey_address && v.scriptpubkey_address !== currentAddress);
-  const senderVin = tx.vin?.find((v: any) => v.prevout?.scriptpubkey_address && v.prevout.scriptpubkey_address !== currentAddress);
+  const firstOurAddress = tx.vout?.find((v: any) => walletAddresses.has(v.scriptpubkey_address))?.scriptpubkey_address
+    || Array.from(walletAddresses)[0];
+  const recipientVout = tx.vout?.find((v: any) => v.scriptpubkey_address && !walletAddresses.has(v.scriptpubkey_address));
+  const senderVin = tx.vin?.find((v: any) => v.prevout?.scriptpubkey_address && !walletAddresses.has(v.prevout.scriptpubkey_address));
 
   return {
     txid: tx.txid,
@@ -422,45 +568,90 @@ function mapRawTxToTransaction(tx: any, currentAddress: string): Transaction {
     fee: tx.fee || 0,
     status: tx.status.confirmed ? 'confirmed' : 'pending',
     type,
-    address: currentAddress,
-    from: type === 'receive' ? senderVin?.prevout?.scriptpubkey_address : currentAddress,
-    to: type === 'send' ? recipientVout?.scriptpubkey_address : currentAddress,
+    address: firstOurAddress,
+    from: type === 'receive' ? senderVin?.prevout?.scriptpubkey_address : firstOurAddress,
+    to: type === 'send' ? recipientVout?.scriptpubkey_address : firstOurAddress,
   };
 }
 
 /**
- * Refresh wallet data from blockchain API
+ * Refresh wallet data from blockchain API.
+ * Aggregates balance, transactions, and UTXOs across all HD addresses.
  */
 export async function refreshWalletData() {
-  let currentAddress = '';
+  let addresses: DerivedAddress[] = [];
 
   walletStore.update(state => {
-    currentAddress = state.address;
+    addresses = state.addresses;
     return { ...state, isLoading: true, error: undefined, hasMoreTransactions: true };
   });
 
-  if (!currentAddress) {
+  if (!addresses.length) {
     walletStore.update(state => ({
       ...state,
       isLoading: false,
-      error: 'No wallet address configured'
+      error: 'No wallet addresses configured'
     }));
     return;
   }
 
+  const allAddressStrings = new Set(addresses.map(a => a.address));
+
   try {
-    const [addressStats, txHistory] = await Promise.all([
-      blockchain.getAddressStats(currentAddress),
-      blockchain.getTransactions(currentAddress)
-    ]);
+    // Aggregate balance across all addresses
+    let totalConfirmed = 0;
+    let totalUnconfirmed = 0;
+    for (const addr of addresses) {
+      try {
+        const stats = await blockchain.getAddressStats(addr.address);
+        totalConfirmed += stats.chain_stats.funded_txo_sum - stats.chain_stats.spent_txo_sum;
+        totalUnconfirmed += stats.mempool_stats.funded_txo_sum - stats.mempool_stats.spent_txo_sum;
+      } catch {
+        // Skip addresses that fail (rate limit, etc.)
+      }
+    }
 
-    const balanceSats = addressStats.chain_stats.funded_txo_sum - addressStats.chain_stats.spent_txo_sum;
+    const balanceSats = totalConfirmed + totalUnconfirmed;
     const balanceBTC = (balanceSats / 100_000_000).toFixed(8);
-
     const price = await blockchain.getBitcoinPrice();
     const balanceUSD = (parseFloat(balanceBTC) * price).toFixed(2);
 
-    const transactions: Transaction[] = txHistory.map((tx: any) => mapRawTxToTransaction(tx, currentAddress));
+    // Aggregate transactions, dedup by txid
+    const txMap = new Map<string, Transaction>();
+    for (const addr of addresses) {
+      try {
+        const txHistory = await blockchain.getTransactions(addr.address);
+        for (const rawTx of txHistory) {
+          if (!txMap.has(rawTx.txid)) {
+            txMap.set(rawTx.txid, mapRawTxMultiAddress(rawTx, allAddressStrings));
+          }
+        }
+      } catch {
+        // Skip on error
+      }
+    }
+    const transactions = Array.from(txMap.values())
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    // Aggregate UTXOs with address/path tagging
+    const taggedUtxos: TaggedUTXO[] = [];
+    for (const addr of addresses) {
+      try {
+        const utxos = await blockchain.getUTXOs(addr.address);
+        for (const u of utxos) {
+          taggedUtxos.push({
+            txid: u.txid,
+            vout: u.vout,
+            value: u.value,
+            address: addr.address,
+            derivationPath: addr.path,
+            status: u.status,
+          });
+        }
+      } catch {
+        // Skip
+      }
+    }
 
     walletStore.update(state => ({
       ...state,
@@ -469,7 +660,8 @@ export async function refreshWalletData() {
       lastBalanceUpdate: Date.now(),
       transactions,
       lastTxUpdate: Date.now(),
-      hasMoreTransactions: txHistory.length > 0,
+      hasMoreTransactions: transactions.length > 0,
+      utxos: taggedUtxos,
       isLoading: false,
       error: undefined
     }));
@@ -485,27 +677,43 @@ export async function refreshWalletData() {
 }
 
 /**
- * Fetch more transactions (paging), appending to the list. Uses last txid in list and /chain/:txid.
+ * Fetch more transactions (paging), appending to the list.
  */
 export async function fetchMoreTransactions() {
-  let currentAddress = '';
+  let addresses: DerivedAddress[] = [];
   let lastTxid = '';
 
   walletStore.update(state => {
-    currentAddress = state.address;
+    addresses = state.addresses;
     const txs = state.transactions;
     lastTxid = txs.length > 0 ? txs[txs.length - 1].txid : '';
     return { ...state, isLoadingMoreTransactions: true };
   });
 
-  if (!currentAddress || !lastTxid) {
+  if (!addresses.length || !lastTxid) {
     walletStore.update(state => ({ ...state, isLoadingMoreTransactions: false, hasMoreTransactions: false }));
     return;
   }
 
+  const allAddressStrings = new Set(addresses.map(a => a.address));
+
   try {
-    const nextPage = await blockchain.getTransactions(currentAddress, lastTxid);
-    const newTransactions = nextPage.map((tx: any) => mapRawTxToTransaction(tx, currentAddress));
+    const txMap = new Map<string, Transaction>();
+    for (const addr of addresses) {
+      try {
+        const nextPage = await blockchain.getTransactions(addr.address, lastTxid);
+        for (const rawTx of nextPage) {
+          if (!txMap.has(rawTx.txid)) {
+            txMap.set(rawTx.txid, mapRawTxMultiAddress(rawTx, allAddressStrings));
+          }
+        }
+      } catch {
+        // Skip on error
+      }
+    }
+
+    const newTransactions = Array.from(txMap.values())
+      .sort((a, b) => b.timestamp - a.timestamp);
 
     walletStore.update(state => {
       const existingIds = new Set(state.transactions.map(t => t.txid));
@@ -514,7 +722,7 @@ export async function fetchMoreTransactions() {
         ...state,
         transactions: [...state.transactions, ...appended],
         lastTxUpdate: Date.now(),
-        hasMoreTransactions: nextPage.length > 0,
+        hasMoreTransactions: newTransactions.length > 0,
         isLoadingMoreTransactions: false
       };
     });

@@ -25,6 +25,9 @@
     initializeWalletStore,
     resetWallet,
     fetchMoreTransactions,
+    getNextChangeAddress,
+    getCurrentReceiveAddress,
+    runHdDiscovery,
   } from "$lib/stores/wallet";
   import { qr } from "$lib/services/qr";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
@@ -600,9 +603,11 @@
   $: sendBalanceSats = Math.round(balance * 1e8);
   $: sendAmountValid = sendAmountSats > 0 && sendTotalSats <= sendBalanceSats;
 
-  // Fiat equivalent of send amount (reactive)
+  // Fiat equivalents for send summary (reactive)
   $: sendAmountFiat =
     (parseFloat(sendAmount || "0") || 0) * (btcRateForFiat || 0);
+  $: sendFeeFiat = (sendEstimatedFeeSats / 1e8) * (btcRateForFiat || 0);
+  $: sendTotalFiat = (sendTotalSats / 1e8) * (btcRateForFiat || 0);
 
   /** Extract Bitcoin address from scanned QR (pipe format, BIP21, or raw address). */
   function extractAddressFromQR(qrData: string): string | null {
@@ -667,12 +672,23 @@
   // Receive modal (app-style)
   let receiveQRDataUrl = "";
   let isReceiveCopied = false;
-  // Update receive address from wallet store
-  $: receiveAddress = $walletStore.address || "No address configured";
+  // Re-derive receive address whenever the wallet store changes (hdState, address, etc.).
+  // Reference both $walletStore.hdState and $walletStore.address so Svelte tracks them.
+  $: {
+    void $walletStore.hdState;
+    const hdAddr = getCurrentReceiveAddress();
+    receiveAddress = hdAddr?.address || $walletStore.address || "No address configured";
+  }
 
   async function openReceive() {
     showReceive = true;
     receiveQRDataUrl = "";
+    // Re-derive to guarantee the freshest HD receive address
+    const hdAddr = getCurrentReceiveAddress();
+    const addrToShow = hdAddr?.address || $walletStore.address || "";
+    if (addrToShow !== receiveAddress) {
+      receiveAddress = addrToShow;
+    }
     if (receiveAddress && receiveAddress !== "No address configured") {
       try {
         receiveQRDataUrl = await qr.generateAddressQR(receiveAddress);
@@ -1083,27 +1099,23 @@
     try {
       const amountSats = Math.round(amount * 1e8);
       const wallet = get(walletStore);
-      const address = wallet.address;
       const network = wallet.network || "mainnet";
 
-      if (!address) {
-        throw new Error("No active wallet address");
-      }
-
-      blockchain.setNetwork(network);
-      const utxos = await blockchain.getUTXOs(address);
-      if (!utxos || utxos.length === 0) {
+      // Use aggregated tagged UTXOs from HD wallet store
+      const taggedUtxos = wallet.utxos || [];
+      if (taggedUtxos.length === 0) {
         throw new Error("No UTXOs available for spending");
       }
 
-      const balanceSats = utxos.reduce((sum, u) => sum + u.value, 0);
+      blockchain.setNetwork(network);
+
+      const balanceSats = taggedUtxos.reduce((sum, u) => sum + u.value, 0);
       if (amountSats > balanceSats) {
         throw new Error(
           `Insufficient balance. Have ${balanceSats} sats, need ${amountSats} sats`,
         );
       }
 
-      // Use selected fee strategy (economy, 1hr, 30m, fast)
       let feeRateUsed = getSendFeeRate();
       if (!feeRateUsed || feeRateUsed <= 0) {
         const feeEst = await blockchain.getFeeEstimates();
@@ -1121,12 +1133,14 @@
       const initialVsize = baseSize + inputSize + numOutputs * outputSize;
       const initialFee = Math.ceil(initialVsize * feeRateUsed);
       let targetSats = amountSats + initialFee;
-      const sortedUtxos = [...utxos].sort((a, b) => b.value - a.value);
+      const sortedUtxos = [...taggedUtxos].sort((a, b) => b.value - a.value);
       let totalInput = 0;
       let numInputs = 0;
+      const selectedUtxos: typeof taggedUtxos = [];
       for (const u of sortedUtxos) {
         totalInput += u.value;
         numInputs += 1;
+        selectedUtxos.push(u);
         if (totalInput >= targetSats) break;
       }
       const estimatedVsize =
@@ -1139,28 +1153,35 @@
         );
       }
 
-      const currentAddr = wallet.addresses?.find((a) => a.address === address);
-      const addressType = currentAddr?.type ?? "";
-      const derivationPath = currentAddr?.path ?? "";
+      const hdState = wallet.hdState;
+      const addressType = hdState?.addressType ?? "segwit-native";
+      const firstInputPath = selectedUtxos[0]?.derivationPath ?? "";
 
-      const sendBitcoinData = {
-        toAddress: sendAddress,
-        amountSats,
-        feeSats,
-        spendingHash: "",
-        addressType,
-        derivationPath,
-        network,
-      };
+      // Build utxosJson matching mobile's expected format
+      const utxosJson = JSON.stringify(
+        selectedUtxos.map((u) => ({
+          txid: u.txid,
+          vout: u.vout,
+          value: u.value,
+          derivationPath: u.derivationPath,
+          address: u.address,
+        })),
+      );
+
+      // Change output: derive the next HD change address
+      const changeAddrObj = getNextChangeAddress();
+      const changeAddress = changeAddrObj?.address ?? "";
 
       const { dataUrl } = await qr.generateSendQR(
-        sendBitcoinData.toAddress,
-        sendBitcoinData.amountSats,
-        sendBitcoinData.feeSats,
-        sendBitcoinData.spendingHash,
-        sendBitcoinData.addressType,
-        sendBitcoinData.derivationPath,
-        sendBitcoinData.network,
+        sendAddress,
+        amountSats,
+        feeSats,
+        "",
+        addressType,
+        firstInputPath,
+        network,
+        utxosJson,
+        changeAddress,
       );
       qrCodeDataUrl = dataUrl;
       qrModalTitle = "Scan with Mobile Wallet to Send";
@@ -1313,6 +1334,9 @@
     const saved = await storage.get<string>("currency");
     if (saved && typeof saved === "string") selectedCurrency = saved;
     if (isPaired && mempoolChoice !== null && mempoolChoice !== "loading") {
+      // Ensure HD discovery has run (skips automatically if still fresh).
+      // Populates hdState so getCurrentReceiveAddress returns the correct index.
+      await runHdDiscovery();
       await fetchWalletDataAndHandleStatus();
       await fetchPrices();
     }
@@ -2253,16 +2277,37 @@
                       {/each}
                     </div>
                   </div>
-                  <div class="send-fee-total-row">
-                    <span class="send-fee-est"
-                      >Est. fee: {sendEstimatedFeeSats} sats</span
-                    >
-                    <span class="send-total-label">Total:</span>
-                    <span
-                      class="send-total-value"
-                      class:invalid={!sendAmountValid && sendAmountSats > 0}
-                      >{(sendTotalSats / 1e8).toFixed(8)} BTC</span
-                    >
+                  <div class="send-summary">
+                    <div class="send-summary-line">
+                      <span class="send-summary-label">Est. Fee:</span>
+                      <span class="send-summary-value">
+                        {sendEstimatedFeeSats} sats
+                        {#if sendFeeFiat > 0}
+                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendFeeFiat)}</span>
+                        {/if}
+                      </span>
+                    </div>
+                    <div class="send-summary-line">
+                      <span class="send-summary-label">Receiver:</span>
+                      <span class="send-summary-value">
+                        {(sendAmountSats / 1e8).toFixed(8)} BTC
+                        {#if sendAmountFiat > 0}
+                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendAmountFiat)}</span>
+                        {/if}
+                      </span>
+                    </div>
+                    <div class="send-summary-line send-summary-total">
+                      <span class="send-summary-label">Total:</span>
+                      <span
+                        class="send-summary-value"
+                        class:invalid={!sendAmountValid && sendAmountSats > 0}
+                      >
+                        {(sendTotalSats / 1e8).toFixed(8)} BTC
+                        {#if sendTotalFiat > 0}
+                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendTotalFiat)}</span>
+                        {/if}
+                      </span>
+                    </div>
                   </div>
                   {#if sendAmountSats > 0 && !sendAmountValid}
                     <p class="send-total-warn">Amount + fee exceeds balance</p>
@@ -3767,7 +3812,7 @@
     background: var(--color-disabled);
   }
   .currency-row.selected {
-    background: var(--color-primary);
+    background: var(--color-bitcoinOrange);
     color: var(--color-primaryContrast);
   }
   .currency-code {

@@ -46,7 +46,8 @@ export interface QRSession {
 }
 
 /**
- * Encode send-bitcoin QR payload: toAddress|amount|fee|spendingHash|addressType|derivationPath|network
+ * Encode send-bitcoin QR payload (v5 format — matches mobile's decodeSendBitcoinQR).
+ * toAddress|amount|fee|spendingHash|addressType|derivationPath|network|utxosJson|changeAddress
  */
 export const encodeSendBitcoinQR = (
   toAddress: string,
@@ -55,11 +56,13 @@ export const encodeSendBitcoinQR = (
   spendingHash: string = '',
   addressType: string = '',
   derivationPath: string = '',
-  network: string = ''
+  network: string = '',
+  utxosJson: string = '',
+  changeAddress: string = ''
 ): string => {
   const amount = typeof amountSats === 'string' ? amountSats : amountSats.toString();
   const fee = typeof feeSats === 'string' ? feeSats : feeSats.toString();
-  return `${toAddress}|${amount}|${fee}|${spendingHash || ''}|${addressType || ''}|${derivationPath || ''}|${network || ''}`;
+  return `${toAddress}|${amount}|${fee}|${spendingHash || ''}|${addressType || ''}|${derivationPath || ''}|${network || ''}|${utxosJson || ''}|${changeAddress || ''}`;
 };
 
 class QRService {
@@ -274,14 +277,15 @@ class QRService {
     spendingHash: string = '',
     addressType: string = '',
     derivationPath: string = '',
-    network: string = ''
+    network: string = '',
+    utxosJson: string = '',
+    changeAddress: string = ''
   ): Promise<{ dataUrl: string; payload: string }> {
     const id = `send-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // Build base payload without spendingHash, then set spendingHash = sha256(qrData + Date.now())
-    const basePayload = encodeSendBitcoinQR(toAddress, amountSats, feeSats, '', addressType, derivationPath, network);
+    const basePayload = encodeSendBitcoinQR(toAddress, amountSats, feeSats, '', addressType, derivationPath, network, utxosJson, changeAddress);
     const computedHash = spendingHash || CryptoJS.SHA256(basePayload + Date.now()).toString();
-    const payload = encodeSendBitcoinQR(toAddress, amountSats, feeSats, computedHash, addressType, derivationPath, network);
+    const payload = encodeSendBitcoinQR(toAddress, amountSats, feeSats, computedHash, addressType, derivationPath, network, utxosJson, changeAddress);
 
     try {
       const dataUrl = await this.generateQRCode(payload);
