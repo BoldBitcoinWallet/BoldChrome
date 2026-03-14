@@ -418,7 +418,7 @@ export async function deriveInitialAddresses() {
 /**
  * @returns `true` if discovery actually ran (and refreshed data), `false` if skipped.
  */
-export async function runHdDiscovery(force = false): Promise<boolean> {
+export async function runHdDiscovery(force = false, overrideAddressType?: 'segwit-native' | 'segwit-nested' | 'legacy'): Promise<boolean> {
   const publicKey = await storage.get<string>('publicKey');
   const chainCode = await storage.get<string>('chainCode');
   const network = (await storage.get<string>('network') as 'mainnet' | 'testnet') || 'mainnet';
@@ -427,15 +427,15 @@ export async function runHdDiscovery(force = false): Promise<boolean> {
   const hdStateJson = await storage.get<string>('hdState');
   const existing: HdState | null = hdStateJson ? JSON.parse(hdStateJson) : null;
 
-  if (!force && existing?.discoveryDone) {
+  const addressType = overrideAddressType || existing?.addressType || 'segwit-native';
+
+  if (!overrideAddressType && !force && existing?.discoveryDone) {
     const age = Date.now() - (existing.discoveryLastAt || 0);
     if (age < HD_DISCOVERY_STALE_MS) {
       console.log('[Wallet] HD discovery still fresh, skipping');
       return false;
     }
   }
-
-  const addressType = existing?.addressType || 'segwit-native';
   const config = { publicKey, chainCode, network };
 
   console.log('[Wallet] Running HD discovery for', addressType);
@@ -485,6 +485,15 @@ export async function runHdDiscovery(force = false): Promise<boolean> {
   // Re-aggregate balance/txs/UTXOs now that the full address set is known
   await refreshWalletData();
   return true;
+}
+
+/**
+ * Switch the active address type, re-run HD discovery, and refresh wallet data.
+ */
+export async function switchAddressType(newType: 'segwit-native' | 'segwit-nested' | 'legacy'): Promise<void> {
+  const state = getStoreValue();
+  if (state.hdState?.addressType === newType) return;
+  await runHdDiscovery(true, newType);
 }
 
 /**

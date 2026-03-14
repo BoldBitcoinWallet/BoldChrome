@@ -997,14 +997,12 @@ html
 html body[data-sveltekit-preload-data="hover"] .popup-root .address-text {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-value,
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-path {
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-prefix {
   color: var(--color-textSecondary);
   font-family: var(--font-mono);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-balance {
-  color: var(--color-success);
-  font-family: var(--font-mono);
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-check {
+  color: var(--color-primary);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .actions {
   background: var(--color-cardBackground);
