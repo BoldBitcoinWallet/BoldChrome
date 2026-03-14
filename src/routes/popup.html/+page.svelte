@@ -21,13 +21,13 @@
   import {
     walletStore,
     refreshWalletData,
-    setAddress,
     initializeWalletStore,
     resetWallet,
     fetchMoreTransactions,
     getNextChangeAddress,
     getCurrentReceiveAddress,
     runHdDiscovery,
+    switchAddressType,
   } from "$lib/stores/wallet";
   import { qr } from "$lib/services/qr";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
@@ -409,25 +409,14 @@
 
   // Convert wallet transactions to UI format (app-aligned: status, amount, address, txid, time)
   $: btcRate = btcRateForFiat;
+  $: activeAddressTypeId = $walletStore.hdState?.addressType || "segwit-native";
   $: selectedAddressType = (() => {
-    if (!$walletStore.address || !$walletStore.addresses.length) return "";
-    const addr = $walletStore.addresses.find(
-      (a) => a.address === $walletStore.address,
-    );
-    return addr?.type === "segwit-native"
-      ? "Native Segwit"
-      : addr?.type === "segwit-nested"
-        ? "Nested Segwit"
-        : addr?.type === "legacy"
-          ? "Legacy"
-          : "Address";
+    const t = ADDRESS_TYPES.find((a) => a.id === activeAddressTypeId);
+    return t?.label || "Native SegWit";
   })();
   $: selectedAddressShort = (() => {
-    if (!$walletStore.address || !$walletStore.addresses.length) return "";
-    const addr = $walletStore.addresses.find(
-      (a) => a.address === $walletStore.address,
-    );
-    const raw = addr ? addr.address : $walletStore.address;
+    if (!$walletStore.address) return "";
+    const raw = $walletStore.address;
     return raw.length > 15 ? `${raw.slice(0, 6)}...${raw.slice(-6)}` : raw;
   })();
   $: transactions = $walletStore.transactions.map((tx) => {
@@ -482,6 +471,7 @@
   let sendAddress = "";
   let showSendAddressScanner = false;
   let receiveAddress = ""; // Will be populated from store
+  let receiveDerivationPath = "";
   let sending = false;
   let message = "";
 
@@ -678,6 +668,7 @@
     void $walletStore.hdState;
     const hdAddr = getCurrentReceiveAddress();
     receiveAddress = hdAddr?.address || $walletStore.address || "No address configured";
+    receiveDerivationPath = hdAddr?.path || "";
   }
 
   async function openReceive() {
@@ -689,6 +680,7 @@
     if (addrToShow !== receiveAddress) {
       receiveAddress = addrToShow;
     }
+    receiveDerivationPath = hdAddr?.path || "";
     if (receiveAddress && receiveAddress !== "No address configured") {
       try {
         receiveQRDataUrl = await qr.generateAddressQR(receiveAddress);
@@ -929,14 +921,29 @@
     showBalance = !showBalance;
   }
 
+  const ADDRESS_TYPES = [
+    { id: "segwit-native" as const, label: "Native SegWit", prefix: "bc1q..." },
+    { id: "segwit-nested" as const, label: "SegWit Compatible", prefix: "3..." },
+    { id: "legacy" as const, label: "Legacy", prefix: "1..." },
+  ];
+
+  let switchingAddressType = false;
+
   function toggleAddressDropdown() {
     showAddressDropdown = !showAddressDropdown;
   }
 
-  async function selectAddress(address: string) {
+  async function handleSelectAddressType(
+    typeId: "segwit-native" | "segwit-nested" | "legacy",
+  ) {
     showAddressDropdown = false;
-    if (address !== $walletStore.address) {
-      await setAddress(address);
+    const current = $walletStore.hdState?.addressType;
+    if (current === typeId) return;
+    switchingAddressType = true;
+    try {
+      await switchAddressType(typeId);
+    } finally {
+      switchingAddressType = false;
     }
   }
 
@@ -1947,11 +1954,12 @@
           </section>
 
           <section class="address-selector">
-            {#if $walletStore.addresses.length > 0}
+            {#if $walletStore.publicKey}
               <div class="address-selector-inner">
                 <button
                   class="dropdown-toggle"
                   on:click={toggleAddressDropdown}
+                  disabled={switchingAddressType}
                 >
                   <span class="address-toggle-left">
                     <img
@@ -1961,9 +1969,13 @@
                       width="18"
                       height="18"
                     />
-                    <span class="address-type-label"
-                      >{selectedAddressType || "Select Address"}</span
-                    >
+                    <span class="address-type-label">
+                      {#if switchingAddressType}
+                        Switching...
+                      {:else}
+                        {selectedAddressType}
+                      {/if}
+                    </span>
                   </span>
                   <span class="address-toggle-right">
                     <span class="address-display">{selectedAddressShort}</span>
@@ -1987,14 +1999,14 @@
             {#if showAddressDropdown}
               <div class="address-dropdown">
                 <div class="dropdown-header">
-                  <span>Select Address ({$walletStore.addresses.length})</span>
+                  <span>Address Type</span>
                 </div>
                 <ul class="address-list">
-                  {#each $walletStore.addresses as addr}
+                  {#each ADDRESS_TYPES as atype}
                     <button
                       class="address-item"
-                      class:active={addr.address === $walletStore.address}
-                      on:click={() => selectAddress(addr.address)}
+                      class:active={activeAddressTypeId === atype.id}
+                      on:click={() => handleSelectAddressType(atype.id)}
                     >
                       <img
                         src={addressTypeIcon}
@@ -2004,25 +2016,11 @@
                         height="18"
                       />
                       <div class="address-info">
-                        <div class="address-text">
-                          {addr.label ||
-                            (addr.type === "segwit-native"
-                              ? "Native Segwit"
-                              : addr.type === "segwit-nested"
-                                ? "Nested Segwit"
-                                : addr.type === "legacy"
-                                  ? "Legacy"
-                                  : `Address ${addr.index}`)}
-                        </div>
-                        <div class="address-value">
-                          {addr.address.slice(0, 12)}...{addr.address.slice(-8)}
-                        </div>
-                        <div class="address-path">{addr.path}</div>
+                        <div class="address-text">{atype.label}</div>
+                        <div class="address-prefix">{atype.prefix}</div>
                       </div>
-                      {#if addr.balance}
-                        <div class="address-balance">
-                          {parseFloat(addr.balance).toFixed(8)} BTC
-                        </div>
+                      {#if activeAddressTypeId === atype.id}
+                        <span class="address-check">✓</span>
                       {/if}
                     </button>
                   {/each}
@@ -2388,6 +2386,9 @@
                   <div class="receive-qr-loading">No address</div>
                 {/if}
                 <div class="receive-address-section">
+                  {#if receiveDerivationPath}
+                    <span class="receive-derivation-path">{receiveDerivationPath}</span>
+                  {/if}
                   <button
                     type="button"
                     class="receive-address-touch"
@@ -3226,29 +3227,16 @@
     white-space: nowrap;
   }
 
-  .address-value {
+  .address-prefix {
     font-size: 10px;
     font-family: var(--font-mono);
     color: var(--color-textSecondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .address-path {
-    font-size: 9px;
-    color: var(--color-textSecondary);
-    font-family: var(--font-mono);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .address-balance {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--color-success);
-    font-family: var(--font-mono);
+  .address-check {
+    font-size: 14px;
+    color: var(--color-primary);
+    font-weight: 700;
     flex-shrink: 0;
   }
 
@@ -3732,6 +3720,15 @@
   .receive-address-section {
     width: 100%;
     margin-bottom: 0;
+  }
+  .receive-derivation-path {
+    display: block;
+    text-align: center;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 11px;
+    color: var(--color-textSecondary, #888);
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
   }
   .receive-address-touch {
     width: 100%;
