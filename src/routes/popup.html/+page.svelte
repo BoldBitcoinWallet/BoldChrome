@@ -119,6 +119,28 @@
     unlockError = "";
   }
 
+  // Detect if running as a full-page tab (expanded view) vs popup.
+  // When opened as a popup the window is constrained; as a tab it fills the viewport.
+  const isExpandedView =
+    typeof window !== "undefined" &&
+    window.innerWidth > 600;
+
+  function openExpandedView() {
+    if (typeof chrome !== "undefined" && chrome.runtime?.getURL && chrome.tabs) {
+      const appUrl = chrome.runtime.getURL("popup.html");
+      chrome.tabs.query({ url: appUrl }, (tabs) => {
+        if (tabs.length > 0 && tabs[0].id != null) {
+          chrome.tabs.update(tabs[0].id, { active: true });
+          if (tabs[0].windowId != null) {
+            chrome.windows.update(tabs[0].windowId, { focused: true });
+          }
+        } else {
+          chrome.tabs.create({ url: appUrl });
+        }
+      });
+    }
+  }
+
   // Pairing state
   // Steps: 0=Start/Logo, 1=Instructions, 2=QR, 3=ResponseChoice, 4=Scanner, 5=ManualInput
   let pairingStep = 0;
@@ -1454,6 +1476,27 @@
         {/if}
       </span>
       <span class="app-header-right">
+        {#if !isExpandedView}
+          <button
+            type="button"
+            class="expand-btn"
+            on:click={openExpandedView}
+            title="Open in full tab"
+            aria-label="Open wallet in full tab"
+          >
+            <svg
+              class="header-icon expand-icon"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              aria-hidden="true"
+            >
+              <path d="M3 3h5.5M3 3v5.5M3 3l6 6M17 17h-5.5M17 17v-5.5M17 17l-6-6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        {/if}
         <button
           class="theme-toggle"
           on:click={toggleTheme}
@@ -2625,6 +2668,8 @@
     background: var(--color-background);
   }
 
+
+
   .popup-root {
     width: 100%;
     min-width: 0;
@@ -2809,6 +2854,7 @@
   .app-header .theme-toggle,
   .app-header .refresh-btn,
   .app-header .balance-visibility-btn,
+  .app-header .expand-btn,
   .app-header .unpair-btn {
     display: flex;
     align-items: center;
@@ -2829,6 +2875,7 @@
   .app-header .theme-toggle:hover:not(:disabled),
   .app-header .refresh-btn:hover:not(:disabled),
   .app-header .balance-visibility-btn:hover,
+  .app-header .expand-btn:hover,
   .app-header .unpair-btn:hover {
     background: var(--color-border);
     transform: scale(1.05);
@@ -2836,6 +2883,7 @@
   .app-header .theme-toggle:active,
   .app-header .refresh-btn:active,
   .app-header .balance-visibility-btn:active,
+  .app-header .expand-btn:active,
   .app-header .unpair-btn:active {
     transform: scale(0.98);
   }
@@ -2851,6 +2899,10 @@
     width: 20px;
     height: 20px;
     object-fit: contain;
+    opacity: 0.9;
+  }
+  .expand-icon {
+    color: var(--color-text);
     opacity: 0.9;
   }
   :global([data-theme="darkPolished"]) .header-icon {
@@ -5097,5 +5149,40 @@
     font-size: 13px;
     font-weight: 600;
     padding: 8px 14px;
+  }
+
+  /* Expanded / full-tab view: allow the app to fill the browser tab.
+     Placed last so it wins over the fixed 380px popup rules above. */
+  @media (min-width: 601px) {
+    :global(html) {
+      width: 100% !important;
+      min-height: 100vh !important;
+      height: auto !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      display: flex !important;
+      justify-content: center !important;
+      background: var(--color-background);
+    }
+    :global(body) {
+      width: 100% !important;
+      max-width: 900px !important;
+      min-height: 100vh !important;
+      height: auto !important;
+      margin: 0 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+    }
+    :global(body[data-sveltekit-preload-data="hover"]) {
+      width: 100% !important;
+      max-width: 900px !important;
+    }
+    .wallet {
+      max-width: 900px;
+      overflow: visible;
+    }
+    .popup-root {
+      overflow: visible;
+    }
   }
 </style>
