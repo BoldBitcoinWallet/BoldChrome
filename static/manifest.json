@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bold Wallet",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Bold Bitcoin Wallet - Watch-only wallet with QR-based mobile signing",
   "permissions": ["storage", "tabs"],
   "host_permissions": ["https://mempool.space/*"],
