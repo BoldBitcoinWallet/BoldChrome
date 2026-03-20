@@ -8,7 +8,7 @@ import { Point, getPublicKey, sign as ecdsaSign, verify as ecdsaVerify, schnorr,
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
 import { writable, get } from 'svelte/store';
-import { walletStore } from '../stores/wallet';
+import { walletStore, getNextChangeAddress, type TaggedUTXO } from '../stores/wallet';
 import { blockchain } from './blockchain';
 import { qr } from './qr';
 
@@ -232,9 +232,10 @@ class PsbtService {
   public session = { subscribe: this.currentSession.subscribe };
 
   /**
-   * Create a PSBT for spending Bitcoin
+   * Create a PSBT for spending Bitcoin using tagged UTXOs from all HD addresses.
+   * Change goes to a fresh HD change address (not the sending address).
    */
-  async createPsbt(params: CreatePsbtParams): Promise<{ psbtBase64: string; feeSats: number; psbtId: string }> {
+  async createPsbt(params: CreatePsbtParams): Promise<{ psbtBase64: string; feeSats: number; psbtId: string; utxosJson: string; changeAddress: string }> {
     const { recipientAddress, amountSats, feeRate = 5 } = params;
 
     console.log('[PSBT] Creating PSBT:', {
@@ -244,35 +245,27 @@ class PsbtService {
     });
 
     const wallet = get(walletStore);
-    if (!wallet.address) {
-      throw new Error('No active wallet address');
+    if (!wallet.utxos || wallet.utxos.length === 0) {
+      throw new Error('No UTXOs available for spending');
     }
 
     const network = wallet.network === 'testnet' 
       ? bitcoin.networks.testnet 
       : bitcoin.networks.bitcoin;
 
-    // Fetch UTXOs for the current address
-    const utxos = await blockchain.getUTXOs(wallet.address);
-    if (!utxos || utxos.length === 0) {
-      throw new Error('No UTXOs available for spending');
-    }
+    console.log('[PSBT] Found', wallet.utxos.length, 'tagged UTXOs across all addresses');
 
-    console.log('[PSBT] Found', utxos.length, 'UTXOs');
-
-    // Create PSBT
     const psbt = new bitcoin.Psbt({ network });
 
-    // Select UTXOs to cover amount + estimated fee
-    const estimatedSize = 250; // Rough estimate for 1-in, 2-out transaction
+    const estimatedSize = 250;
     const estimatedFee = Math.ceil(estimatedSize * feeRate);
     const targetAmount = amountSats + estimatedFee;
 
     let totalInput = 0;
-    const selectedUtxos: UTXO[] = [];
+    const selectedUtxos: TaggedUTXO[] = [];
 
-    // Simple UTXO selection - use largest first
-    const sortedUtxos = [...utxos].sort((a, b) => b.value - a.value);
+    // Largest-first coin selection from the aggregated tagged UTXO set
+    const sortedUtxos = [...wallet.utxos].sort((a, b) => b.value - a.value);
     
     for (const utxo of sortedUtxos) {
       if (totalInput >= targetAmount) break;
@@ -280,10 +273,8 @@ class PsbtService {
       selectedUtxos.push(utxo);
       totalInput += utxo.value;
 
-      // Fetch the full transaction hex for this UTXO
       const txHex = await blockchain.getTransactionHex(utxo.txid);
       
-      // Add input to PSBT (use browser-friendly Uint8Array from hex)
       const txBytes = (function hexToU8Local(hex: string) {
         const clean = (hex || '').replace(/^0x/, '').replace(/\s+/g, '');
         const len = Math.ceil(clean.length / 2);
@@ -303,37 +294,47 @@ class PsbtService {
       throw new Error(`Insufficient funds. Have ${totalInput} sats, need ${targetAmount} sats`);
     }
 
-    // Calculate actual fee based on selected inputs
     const actualSize = this.estimateTransactionSize(selectedUtxos.length, 2);
     const actualFee = Math.ceil(actualSize * feeRate);
     const changeAmount = totalInput - amountSats - actualFee;
 
-    // Add recipient output
+    // Recipient output
     psbt.addOutput({
       address: recipientAddress,
       value: BigInt(amountSats),
     });
 
-    // Add change output if significant (> dust threshold)
-    if (changeAmount > 546) {
+    // Change goes to a fresh HD change address
+    const changeAddr = getNextChangeAddress();
+    if (changeAmount > 546 && changeAddr) {
       psbt.addOutput({
-        address: wallet.address,
+        address: changeAddr.address,
         value: BigInt(changeAmount),
       });
     }
+
+    // Build utxosJson matching mobile's expected format:
+    // [{txid, vout, value, derivationPath, address}]
+    const utxosJson = JSON.stringify(selectedUtxos.map(u => ({
+      txid: u.txid,
+      vout: u.vout,
+      value: u.value,
+      derivationPath: u.derivationPath,
+      address: u.address,
+    })));
 
     console.log('[PSBT] Transaction details:', {
       inputs: selectedUtxos.length,
       totalInput,
       recipient: amountSats,
       change: changeAmount,
+      changeAddress: changeAddr?.address?.slice(0, 12),
       fee: actualFee,
       feeRate
     });
 
     const psbtBase64 = psbt.toBase64();
     
-    // Create session
     const psbtId = `psbt-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     this.currentSession.set({
       psbtId,
@@ -345,7 +346,7 @@ class PsbtService {
       feeSats: actualFee
     });
 
-    return { psbtBase64, feeSats: actualFee, psbtId };
+    return { psbtBase64, feeSats: actualFee, psbtId, utxosJson, changeAddress: changeAddr?.address || '' };
   }
 
   /**

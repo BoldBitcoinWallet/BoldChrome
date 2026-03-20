@@ -21,10 +21,13 @@
   import {
     walletStore,
     refreshWalletData,
-    setAddress,
     initializeWalletStore,
     resetWallet,
     fetchMoreTransactions,
+    getNextChangeAddress,
+    getCurrentReceiveAddress,
+    runHdDiscovery,
+    switchAddressType,
   } from "$lib/stores/wallet";
   import { qr } from "$lib/services/qr";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
@@ -428,25 +431,14 @@
 
   // Convert wallet transactions to UI format (app-aligned: status, amount, address, txid, time)
   $: btcRate = btcRateForFiat;
+  $: activeAddressTypeId = $walletStore.hdState?.addressType || "segwit-native";
   $: selectedAddressType = (() => {
-    if (!$walletStore.address || !$walletStore.addresses.length) return "";
-    const addr = $walletStore.addresses.find(
-      (a) => a.address === $walletStore.address,
-    );
-    return addr?.type === "segwit-native"
-      ? "Native Segwit"
-      : addr?.type === "segwit-nested"
-        ? "Nested Segwit"
-        : addr?.type === "legacy"
-          ? "Legacy"
-          : "Address";
+    const t = ADDRESS_TYPES.find((a) => a.id === activeAddressTypeId);
+    return t?.label || "Native SegWit";
   })();
   $: selectedAddressShort = (() => {
-    if (!$walletStore.address || !$walletStore.addresses.length) return "";
-    const addr = $walletStore.addresses.find(
-      (a) => a.address === $walletStore.address,
-    );
-    const raw = addr ? addr.address : $walletStore.address;
+    if (!$walletStore.address) return "";
+    const raw = $walletStore.address;
     return raw.length > 15 ? `${raw.slice(0, 6)}...${raw.slice(-6)}` : raw;
   })();
   $: transactions = $walletStore.transactions.map((tx) => {
@@ -501,6 +493,7 @@
   let sendAddress = "";
   let showSendAddressScanner = false;
   let receiveAddress = ""; // Will be populated from store
+  let receiveDerivationPath = "";
   let sending = false;
   let message = "";
 
@@ -622,9 +615,11 @@
   $: sendBalanceSats = Math.round(balance * 1e8);
   $: sendAmountValid = sendAmountSats > 0 && sendTotalSats <= sendBalanceSats;
 
-  // Fiat equivalent of send amount (reactive)
+  // Fiat equivalents for send summary (reactive)
   $: sendAmountFiat =
     (parseFloat(sendAmount || "0") || 0) * (btcRateForFiat || 0);
+  $: sendFeeFiat = (sendEstimatedFeeSats / 1e8) * (btcRateForFiat || 0);
+  $: sendTotalFiat = (sendTotalSats / 1e8) * (btcRateForFiat || 0);
 
   /** Extract Bitcoin address from scanned QR (pipe format, BIP21, or raw address). */
   function extractAddressFromQR(qrData: string): string | null {
@@ -689,12 +684,25 @@
   // Receive modal (app-style)
   let receiveQRDataUrl = "";
   let isReceiveCopied = false;
-  // Update receive address from wallet store
-  $: receiveAddress = $walletStore.address || "No address configured";
+  // Re-derive receive address whenever the wallet store changes (hdState, address, etc.).
+  // Reference both $walletStore.hdState and $walletStore.address so Svelte tracks them.
+  $: {
+    void $walletStore.hdState;
+    const hdAddr = getCurrentReceiveAddress();
+    receiveAddress = hdAddr?.address || $walletStore.address || "No address configured";
+    receiveDerivationPath = hdAddr?.path || "";
+  }
 
   async function openReceive() {
     showReceive = true;
     receiveQRDataUrl = "";
+    // Re-derive to guarantee the freshest HD receive address
+    const hdAddr = getCurrentReceiveAddress();
+    const addrToShow = hdAddr?.address || $walletStore.address || "";
+    if (addrToShow !== receiveAddress) {
+      receiveAddress = addrToShow;
+    }
+    receiveDerivationPath = hdAddr?.path || "";
     if (receiveAddress && receiveAddress !== "No address configured") {
       try {
         receiveQRDataUrl = await qr.generateAddressQR(receiveAddress);
@@ -935,14 +943,29 @@
     showBalance = !showBalance;
   }
 
+  const ADDRESS_TYPES = [
+    { id: "segwit-native" as const, label: "Native SegWit", prefix: "bc1q..." },
+    { id: "segwit-nested" as const, label: "SegWit Compatible", prefix: "3..." },
+    { id: "legacy" as const, label: "Legacy", prefix: "1..." },
+  ];
+
+  let switchingAddressType = false;
+
   function toggleAddressDropdown() {
     showAddressDropdown = !showAddressDropdown;
   }
 
-  async function selectAddress(address: string) {
+  async function handleSelectAddressType(
+    typeId: "segwit-native" | "segwit-nested" | "legacy",
+  ) {
     showAddressDropdown = false;
-    if (address !== $walletStore.address) {
-      await setAddress(address);
+    const current = $walletStore.hdState?.addressType;
+    if (current === typeId) return;
+    switchingAddressType = true;
+    try {
+      await switchAddressType(typeId);
+    } finally {
+      switchingAddressType = false;
     }
   }
 
@@ -1105,27 +1128,23 @@
     try {
       const amountSats = Math.round(amount * 1e8);
       const wallet = get(walletStore);
-      const address = wallet.address;
       const network = wallet.network || "mainnet";
 
-      if (!address) {
-        throw new Error("No active wallet address");
-      }
-
-      blockchain.setNetwork(network);
-      const utxos = await blockchain.getUTXOs(address);
-      if (!utxos || utxos.length === 0) {
+      // Use aggregated tagged UTXOs from HD wallet store
+      const taggedUtxos = wallet.utxos || [];
+      if (taggedUtxos.length === 0) {
         throw new Error("No UTXOs available for spending");
       }
 
-      const balanceSats = utxos.reduce((sum, u) => sum + u.value, 0);
+      blockchain.setNetwork(network);
+
+      const balanceSats = taggedUtxos.reduce((sum, u) => sum + u.value, 0);
       if (amountSats > balanceSats) {
         throw new Error(
           `Insufficient balance. Have ${balanceSats} sats, need ${amountSats} sats`,
         );
       }
 
-      // Use selected fee strategy (economy, 1hr, 30m, fast)
       let feeRateUsed = getSendFeeRate();
       if (!feeRateUsed || feeRateUsed <= 0) {
         const feeEst = await blockchain.getFeeEstimates();
@@ -1143,12 +1162,14 @@
       const initialVsize = baseSize + inputSize + numOutputs * outputSize;
       const initialFee = Math.ceil(initialVsize * feeRateUsed);
       let targetSats = amountSats + initialFee;
-      const sortedUtxos = [...utxos].sort((a, b) => b.value - a.value);
+      const sortedUtxos = [...taggedUtxos].sort((a, b) => b.value - a.value);
       let totalInput = 0;
       let numInputs = 0;
+      const selectedUtxos: typeof taggedUtxos = [];
       for (const u of sortedUtxos) {
         totalInput += u.value;
         numInputs += 1;
+        selectedUtxos.push(u);
         if (totalInput >= targetSats) break;
       }
       const estimatedVsize =
@@ -1161,28 +1182,35 @@
         );
       }
 
-      const currentAddr = wallet.addresses?.find((a) => a.address === address);
-      const addressType = currentAddr?.type ?? "";
-      const derivationPath = currentAddr?.path ?? "";
+      const hdState = wallet.hdState;
+      const addressType = hdState?.addressType ?? "segwit-native";
+      const firstInputPath = selectedUtxos[0]?.derivationPath ?? "";
 
-      const sendBitcoinData = {
-        toAddress: sendAddress,
-        amountSats,
-        feeSats,
-        spendingHash: "",
-        addressType,
-        derivationPath,
-        network,
-      };
+      // Build utxosJson matching mobile's expected format
+      const utxosJson = JSON.stringify(
+        selectedUtxos.map((u) => ({
+          txid: u.txid,
+          vout: u.vout,
+          value: u.value,
+          derivationPath: u.derivationPath,
+          address: u.address,
+        })),
+      );
+
+      // Change output: derive the next HD change address
+      const changeAddrObj = getNextChangeAddress();
+      const changeAddress = changeAddrObj?.address ?? "";
 
       const { dataUrl } = await qr.generateSendQR(
-        sendBitcoinData.toAddress,
-        sendBitcoinData.amountSats,
-        sendBitcoinData.feeSats,
-        sendBitcoinData.spendingHash,
-        sendBitcoinData.addressType,
-        sendBitcoinData.derivationPath,
-        sendBitcoinData.network,
+        sendAddress,
+        amountSats,
+        feeSats,
+        "",
+        addressType,
+        firstInputPath,
+        network,
+        utxosJson,
+        changeAddress,
       );
       qrCodeDataUrl = dataUrl;
       qrModalTitle = "Scan with Mobile Wallet to Send";
@@ -1335,6 +1363,9 @@
     const saved = await storage.get<string>("currency");
     if (saved && typeof saved === "string") selectedCurrency = saved;
     if (isPaired && mempoolChoice !== null && mempoolChoice !== "loading") {
+      // Ensure HD discovery has run (skips automatically if still fresh).
+      // Populates hdState so getCurrentReceiveAddress returns the correct index.
+      await runHdDiscovery();
       await fetchWalletDataAndHandleStatus();
       await fetchPrices();
     }
@@ -1966,11 +1997,12 @@
           </section>
 
           <section class="address-selector">
-            {#if $walletStore.addresses.length > 0}
+            {#if $walletStore.publicKey}
               <div class="address-selector-inner">
                 <button
                   class="dropdown-toggle"
                   on:click={toggleAddressDropdown}
+                  disabled={switchingAddressType}
                 >
                   <span class="address-toggle-left">
                     <img
@@ -1980,9 +2012,13 @@
                       width="18"
                       height="18"
                     />
-                    <span class="address-type-label"
-                      >{selectedAddressType || "Select Address"}</span
-                    >
+                    <span class="address-type-label">
+                      {#if switchingAddressType}
+                        Switching...
+                      {:else}
+                        {selectedAddressType}
+                      {/if}
+                    </span>
                   </span>
                   <span class="address-toggle-right">
                     <span class="address-display">{selectedAddressShort}</span>
@@ -2006,14 +2042,14 @@
             {#if showAddressDropdown}
               <div class="address-dropdown">
                 <div class="dropdown-header">
-                  <span>Select Address ({$walletStore.addresses.length})</span>
+                  <span>Address Type</span>
                 </div>
                 <ul class="address-list">
-                  {#each $walletStore.addresses as addr}
+                  {#each ADDRESS_TYPES as atype}
                     <button
                       class="address-item"
-                      class:active={addr.address === $walletStore.address}
-                      on:click={() => selectAddress(addr.address)}
+                      class:active={activeAddressTypeId === atype.id}
+                      on:click={() => handleSelectAddressType(atype.id)}
                     >
                       <img
                         src={addressTypeIcon}
@@ -2023,25 +2059,11 @@
                         height="18"
                       />
                       <div class="address-info">
-                        <div class="address-text">
-                          {addr.label ||
-                            (addr.type === "segwit-native"
-                              ? "Native Segwit"
-                              : addr.type === "segwit-nested"
-                                ? "Nested Segwit"
-                                : addr.type === "legacy"
-                                  ? "Legacy"
-                                  : `Address ${addr.index}`)}
-                        </div>
-                        <div class="address-value">
-                          {addr.address.slice(0, 12)}...{addr.address.slice(-8)}
-                        </div>
-                        <div class="address-path">{addr.path}</div>
+                        <div class="address-text">{atype.label}</div>
+                        <div class="address-prefix">{atype.prefix}</div>
                       </div>
-                      {#if addr.balance}
-                        <div class="address-balance">
-                          {parseFloat(addr.balance).toFixed(8)} BTC
-                        </div>
+                      {#if activeAddressTypeId === atype.id}
+                        <span class="address-check">✓</span>
                       {/if}
                     </button>
                   {/each}
@@ -2296,16 +2318,37 @@
                       {/each}
                     </div>
                   </div>
-                  <div class="send-fee-total-row">
-                    <span class="send-fee-est"
-                      >Est. fee: {sendEstimatedFeeSats} sats</span
-                    >
-                    <span class="send-total-label">Total:</span>
-                    <span
-                      class="send-total-value"
-                      class:invalid={!sendAmountValid && sendAmountSats > 0}
-                      >{(sendTotalSats / 1e8).toFixed(8)} BTC</span
-                    >
+                  <div class="send-summary">
+                    <div class="send-summary-line">
+                      <span class="send-summary-label">Est. Fee:</span>
+                      <span class="send-summary-value">
+                        {sendEstimatedFeeSats} sats
+                        {#if sendFeeFiat > 0}
+                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendFeeFiat)}</span>
+                        {/if}
+                      </span>
+                    </div>
+                    <div class="send-summary-line">
+                      <span class="send-summary-label">Receiver:</span>
+                      <span class="send-summary-value">
+                        {(sendAmountSats / 1e8).toFixed(8)} BTC
+                        {#if sendAmountFiat > 0}
+                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendAmountFiat)}</span>
+                        {/if}
+                      </span>
+                    </div>
+                    <div class="send-summary-line send-summary-total">
+                      <span class="send-summary-label">Total:</span>
+                      <span
+                        class="send-summary-value"
+                        class:invalid={!sendAmountValid && sendAmountSats > 0}
+                      >
+                        {(sendTotalSats / 1e8).toFixed(8)} BTC
+                        {#if sendTotalFiat > 0}
+                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendTotalFiat)}</span>
+                        {/if}
+                      </span>
+                    </div>
                   </div>
                   {#if sendAmountSats > 0 && !sendAmountValid}
                     <p class="send-total-warn">Amount + fee exceeds balance</p>
@@ -2386,6 +2429,9 @@
                   <div class="receive-qr-loading">No address</div>
                 {/if}
                 <div class="receive-address-section">
+                  {#if receiveDerivationPath}
+                    <span class="receive-derivation-path">{receiveDerivationPath}</span>
+                  {/if}
                   <button
                     type="button"
                     class="receive-address-touch"
@@ -3233,29 +3279,16 @@
     white-space: nowrap;
   }
 
-  .address-value {
+  .address-prefix {
     font-size: 10px;
     font-family: var(--font-mono);
     color: var(--color-textSecondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .address-path {
-    font-size: 9px;
-    color: var(--color-textSecondary);
-    font-family: var(--font-mono);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .address-balance {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--color-success);
-    font-family: var(--font-mono);
+  .address-check {
+    font-size: 14px;
+    color: var(--color-primary);
+    font-weight: 700;
     flex-shrink: 0;
   }
 
@@ -3740,6 +3773,15 @@
     width: 100%;
     margin-bottom: 0;
   }
+  .receive-derivation-path {
+    display: block;
+    text-align: center;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 11px;
+    color: var(--color-textSecondary, #888);
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+  }
   .receive-address-touch {
     width: 100%;
     padding: var(--space-medium, 12px);
@@ -3819,7 +3861,7 @@
     background: var(--color-disabled);
   }
   .currency-row.selected {
-    background: var(--color-primary);
+    background: var(--color-bitcoinOrange);
     color: var(--color-primaryContrast);
   }
   .currency-code {

@@ -997,14 +997,12 @@ html
 html body[data-sveltekit-preload-data="hover"] .popup-root .address-text {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-value,
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-path {
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-prefix {
   color: var(--color-textSecondary);
   font-family: var(--font-mono);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-balance {
-  color: var(--color-success);
-  font-family: var(--font-mono);
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-check {
+  color: var(--color-primary);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .actions {
   background: var(--color-cardBackground);
@@ -1690,33 +1688,54 @@ html
   opacity: 0.6;
   cursor: not-allowed;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-row,
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-total-row {
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-row {
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
   margin-bottom: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-total-row {
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-small);
+  font-size: var(--font-size-sm);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-line {
+  display: flex;
+  justify-content: space-between;
   align-items: baseline;
-  gap: var(--space-small) var(--space-medium);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-est {
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-label {
   color: var(--color-textSecondary);
+  flex-shrink: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-total-label {
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-fiat {
+  font-family: var(--font-body, sans-serif);
+  color: var(--color-textSecondary);
+  font-size: var(--font-size-xs);
+  margin-left: 4px;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total {
+  border-top: 1px solid var(--color-border);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total .send-summary-label {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-total-value {
-  font-family: var(--font-mono);
-  color: var(--color-text);
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total .send-summary-value {
+  font-weight: var(--font-weight-semibold);
 }
 html
   body[data-sveltekit-preload-data="hover"]
   .popup-root
-  .send-total-value.invalid {
+  .send-summary-value.invalid {
   color: var(--color-error);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .send-total-warn {

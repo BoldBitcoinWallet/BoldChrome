@@ -28,6 +28,9 @@ export interface StorageData {
   /** Mempool API: undefined = not chosen (show preference after pairing), '' = default mempool.space, else custom mainnet URL */
   mempoolMainnetUrl?: string | null;
 
+  // HD wallet state (gap-limit discovery results)
+  hdState?: string; // JSON stringified HdState
+
   // PIN lock (extension)
   pinHash?: string; // SHA-256 hash of PIN, never store raw PIN
 
