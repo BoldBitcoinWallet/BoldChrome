@@ -17,6 +17,7 @@
   import bitcoinLogo from "$lib/assets/bitcoin-logo.png";
   import pasteIcon from "$lib/assets/paste-icon.png";
   import { onMount, tick } from "svelte";
+  import { fade } from "svelte/transition";
   import { get } from "svelte/store";
   import {
     walletStore,
@@ -675,7 +676,7 @@
       toastMessage = "";
       toastType = "";
       toastTimer = null;
-    }, 3000);
+    }, 3200);
   }
   let showQRModal = false;
   let qrCodeDataUrl = "";
@@ -1614,6 +1615,8 @@
       class="toast toast-global {toastType}"
       role="status"
       aria-live="polite"
+      in:fade={{ duration: 200 }}
+      out:fade={{ duration: 420 }}
     >
       {toastMessage}
     </div>
@@ -2186,7 +2189,7 @@
             </section>
           {:else}
             <section class="tx-list-hidden fade-in">
-              <p class="empty">Balance hidden</p>
+              <p class="empty">Balance/Transactions hidden</p>
             </section>
           {/if}
 
@@ -2700,7 +2703,8 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
       Ubuntu, Cantarell, sans-serif;
     width: 380px;
-    min-height: 580px;
+    /* Popup shell height: Chrome caps ~600px — app.css @media (max-width: 600px) pins to viewport */
+    min-height: 600px;
     background: var(--color-background);
     overflow-x: hidden;
     color: var(--color-text);
@@ -2708,7 +2712,7 @@
 
   :global(html) {
     width: 380px;
-    min-height: 580px;
+    min-height: 600px;
     height: 100%;
     overflow: hidden;
     background: var(--color-background);
@@ -3923,6 +3927,7 @@
   .receive-action-icon {
     display: block;
     object-fit: contain;
+    filter: brightness(0) invert(1);
   }
   :global([data-theme="darkPolished"]) .receive-action-icon {
     filter: brightness(0) invert(1);
@@ -5196,6 +5201,12 @@
   /* Expanded / full-tab view: allow the app to fill the browser tab.
      Placed last so it wins over the fixed 380px popup rules above. */
   @media (min-width: 601px) {
+    /* Match app.css specificity so this isn’t overridden by critical header rules */
+    :global(html body[data-sveltekit-preload-data="hover"] .app-header) {
+      left: 50% !important;
+      right: auto !important;
+      transform: translateX(-50%) !important;
+    }
     :global(html) {
       width: 100% !important;
       min-height: 100vh !important;

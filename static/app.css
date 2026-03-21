@@ -55,30 +55,43 @@ html body[data-sveltekit-preload-data="hover"] .popup-root {
   background: var(--color-background);
   overflow: hidden;
 }
-/* Global toast – fixed at top center, always visible when shown */
+/* Global toast – fixed at top center; compact width (not full tab); glassy + readable */
 html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global {
   position: fixed;
   top: 56px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;
-  padding: var(--space-small) var(--space-medium);
-  border-radius: var(--radius-medium);
+  padding: 10px 16px;
+  border-radius: var(--radius-large);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-semibold);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  max-width: calc(100% - var(--space-large));
   text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+  display: block;
+  width: fit-content;
+  max-width: min(320px, calc(100vw - 28px));
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 12px 32px rgba(0, 0, 0, 0.14);
+  backdrop-filter: saturate(130%) blur(14px);
+  -webkit-backdrop-filter: saturate(130%) blur(14px);
 }
 html
   body[data-sveltekit-preload-data="hover"]
   .popup-root
   .toast-global.success {
-  background: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 78%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 28%, transparent);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global.error {
-  background: var(--color-bitcoinOrange);
+  background: color-mix(in srgb, var(--color-bitcoinOrange) 82%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 24%, transparent);
 }
 html body[data-sveltekit-preload-data="hover"] .app-content {
   flex: 1;
@@ -98,6 +111,47 @@ html
   .app-content {
   margin-top: 0;
   padding-top: 0;
+}
+
+/*
+ * Extension action popup (narrow ~380px): Chrome chooses window size and caps height (~600px).
+ * Manifest cannot set popup dimensions. A large html/body min-height only grows the document past
+ * the window → useless outer scrollbar. Pin the shell to the viewport (up to 600px) and scroll
+ * inside .app-content. Full-tab view is min-width: 601px and uses 100vh in +page.svelte.
+ */
+@media (max-width: 600px) {
+  html {
+    width: 380px;
+    min-height: min(600px, 100vh);
+    min-height: min(600px, 100dvh);
+    height: min(600px, 100vh);
+    height: min(600px, 100dvh);
+    max-height: min(600px, 100vh);
+    max-height: min(600px, 100dvh);
+    overflow: hidden !important;
+    box-sizing: border-box;
+  }
+
+  body,
+  body[data-sveltekit-preload-data="hover"] {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+  }
+
+  html body[data-sveltekit-preload-data="hover"] .popup-root {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    flex: 1 1 auto;
+    overflow: hidden !important;
+  }
+
+  html body[data-sveltekit-preload-data="hover"] .app-content {
+    min-height: 0 !important;
+  }
 }
 
 /* ----- Camera permission overlay (first-load) ----- */
@@ -217,6 +271,15 @@ html body[data-sveltekit-preload-data="hover"] .app-header-right {
   align-items: center;
   gap: var(--space-small);
   width: auto !important;
+}
+
+/* Full-tab / wide viewport: center fixed header (same breakpoint as popup page) */
+@media (min-width: 601px) {
+  html body[data-sveltekit-preload-data="hover"] .app-header {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+  }
 }
 
 /* Generic header buttons: same as inner paired header .icon-btn (palette) */
