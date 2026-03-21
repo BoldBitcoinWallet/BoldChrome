@@ -44,6 +44,7 @@ body[data-sveltekit-preload-data="hover"] {
 
 /* ----- Popup root & content (so layout takes effect from app.css) ----- */
 html body[data-sveltekit-preload-data="hover"] .popup-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -54,6 +55,44 @@ html body[data-sveltekit-preload-data="hover"] .popup-root {
   background: var(--color-background);
   overflow: hidden;
 }
+/* Global toast – fixed at top center; compact width (not full tab); glassy + readable */
+html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 10px 16px;
+  border-radius: var(--radius-large);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+  display: block;
+  width: fit-content;
+  max-width: min(320px, calc(100vw - 28px));
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 12px 32px rgba(0, 0, 0, 0.14);
+  backdrop-filter: saturate(130%) blur(14px);
+  -webkit-backdrop-filter: saturate(130%) blur(14px);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .toast-global.success {
+  background: color-mix(in srgb, var(--color-primary) 78%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 28%, transparent);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global.error {
+  background: color-mix(in srgb, var(--color-bitcoinOrange) 82%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 24%, transparent);
+}
 html body[data-sveltekit-preload-data="hover"] .app-content {
   flex: 1;
   display: flex;
@@ -62,7 +101,7 @@ html body[data-sveltekit-preload-data="hover"] .app-content {
   overflow: auto;
   width: 100%;
   margin-top: 48px;
-  padding-top: var(--space-large);
+  padding: var(--space-small);
   min-height: 0;
   box-sizing: border-box;
 }
@@ -72,6 +111,125 @@ html
   .app-content {
   margin-top: 0;
   padding-top: 0;
+}
+
+/*
+ * Extension action popup (narrow ~380px): Chrome chooses window size and caps height (~600px).
+ * Manifest cannot set popup dimensions. A large html/body min-height only grows the document past
+ * the window → useless outer scrollbar. Pin the shell to the viewport (up to 600px) and scroll
+ * inside .app-content. Full-tab view is min-width: 601px and uses 100vh in +page.svelte.
+ */
+@media (max-width: 600px) {
+  html {
+    width: 380px;
+    min-height: min(600px, 100vh);
+    min-height: min(600px, 100dvh);
+    height: min(600px, 100vh);
+    height: min(600px, 100dvh);
+    max-height: min(600px, 100vh);
+    max-height: min(600px, 100dvh);
+    overflow: hidden !important;
+    box-sizing: border-box;
+  }
+
+  body,
+  body[data-sveltekit-preload-data="hover"] {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+  }
+
+  html body[data-sveltekit-preload-data="hover"] .popup-root {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    flex: 1 1 auto;
+    overflow: hidden !important;
+  }
+
+  html body[data-sveltekit-preload-data="hover"] .app-content {
+    min-height: 0 !important;
+  }
+}
+
+/* ----- Camera permission overlay (first-load) ----- */
+html body[data-sveltekit-preload-data="hover"] .camera-permission-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-large);
+  background: var(--color-background);
+  box-sizing: border-box;
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-screen {
+  margin-top: 0;
+  padding-top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-large);
+  min-height: 100%;
+  box-sizing: border-box;
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 320px;
+  padding: var(--space-extraLarge) var(--space-large);
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  margin-bottom: var(--space-large);
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin: 0 0 var(--space-small) 0;
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-hint {
+  font-size: var(--font-size-base);
+  color: var(--color-textSecondary);
+  line-height: 1.5;
+  margin: 0 0 var(--space-large) 0;
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-medium);
+  width: 100%;
+  max-width: 260px;
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-grant {
+  width: 100%;
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-skip {
+  width: 100%;
+  background: var(--color-cardBackground);
+  border: 1px solid var(--color-border);
+  color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .camera-permission-skip:hover {
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 /* ----- Header: logo left, theme right ----- */
@@ -113,6 +271,15 @@ html body[data-sveltekit-preload-data="hover"] .app-header-right {
   align-items: center;
   gap: var(--space-small);
   width: auto !important;
+}
+
+/* Full-tab / wide viewport: center fixed header (same breakpoint as popup page) */
+@media (min-width: 601px) {
+  html body[data-sveltekit-preload-data="hover"] .app-header {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+  }
 }
 
 /* Generic header buttons: same as inner paired header .icon-btn (palette) */
@@ -665,7 +832,8 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .wallet-content {
   flex: 1;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0 var(--space-medium) var(--space-medium);
+  padding: 0;
+  margin-top: var(--space-medium);
   box-sizing: border-box;
 }
 
@@ -892,14 +1060,12 @@ html
 html body[data-sveltekit-preload-data="hover"] .popup-root .address-text {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-value,
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-path {
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-prefix {
   color: var(--color-textSecondary);
   font-family: var(--font-mono);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-balance {
-  color: var(--color-success);
-  font-family: var(--font-mono);
+html body[data-sveltekit-preload-data="hover"] .popup-root .address-check {
+  color: var(--color-primary);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .actions {
   background: var(--color-cardBackground);
@@ -974,7 +1140,10 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer {
   margin-top: var(--space-small);
   border-top: 1px solid var(--color-border);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer-loading,
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .tx-list-footer-loading,
 html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer-end {
   margin: 0;
   font-size: var(--font-size-sm);
@@ -989,9 +1158,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-load-more {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-load-more:hover {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .tx-list-load-more:hover {
   background: var(--color-background);
   border-color: var(--color-primary);
 }
@@ -1007,7 +1181,10 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen {
   box-sizing: border-box;
   flex: 1;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen.pin-loading {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .pin-screen.pin-loading {
   gap: var(--space-medium);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .pin-loading-text {
@@ -1051,7 +1228,10 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-hint {
   line-height: 1.45;
   max-width: 100%;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-hint.pin-hint-long {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .pin-screen-hint.pin-hint-long {
   max-width: 36ch;
   margin-left: auto;
   margin-right: auto;
@@ -1063,7 +1243,10 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-form {
   width: 100%;
   gap: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-form.pin-form-confirm {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .pin-form.pin-form-confirm {
   gap: var(--space-medium);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input {
@@ -1079,9 +1262,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input {
   text-align: center;
   letter-spacing: 0.25em;
   box-sizing: border-box;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input::placeholder {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .pin-input::placeholder {
   color: var(--color-textSecondary);
   opacity: 0.8;
   letter-spacing: 0;
@@ -1091,10 +1279,16 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input[aria-invalid="true"] {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .pin-input[aria-invalid="true"] {
   border-color: var(--color-error);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input[aria-invalid="true"]:focus {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .pin-input[aria-invalid="true"]:focus {
   box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .pin-error {
@@ -1115,10 +1309,16 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-submit {
   border-radius: var(--radius-medium);
 }
 /* ----- Mempool preference screen (after pairing) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-preference-card {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-preference-card {
   max-width: 320px;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-preference-form {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-preference-form {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -1133,7 +1333,10 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-label {
 html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-input {
   letter-spacing: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-preference-actions {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-preference-actions {
   display: flex;
   gap: var(--space-medium);
   margin-top: var(--space-small);
@@ -1158,13 +1361,19 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-card {
   flex-direction: column;
   gap: var(--space-medium);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-title {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-modal-title {
   margin: 0 0 var(--space-small);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-input {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-modal-input {
   width: 100%;
   min-height: 44px;
   padding: var(--space-medium) var(--space-large);
@@ -1176,24 +1385,41 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-input 
   box-sizing: border-box;
   transition: border-color 0.2s;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-input:focus {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-modal-input:focus {
   outline: none;
   border-color: var(--color-primary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-actions {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-modal-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-small);
   justify-content: space-between;
   align-items: center;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-actions .btn-secondary,
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-actions .btn-primary {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-modal-actions
+  .btn-secondary,
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-modal-actions
+  .btn-primary {
   min-height: 44px;
   padding: var(--space-medium) var(--space-large);
   width: 30%;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-reset-btn {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .mempool-modal-reset-btn {
   min-height: 44px;
   padding: var(--space-medium) var(--space-large);
 }
@@ -1217,7 +1443,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-small) var(--space-medium);
-  padding: var(--space-medium);
+  padding-top: var(--space-medium);
   min-height: 40px;
   color: var(--color-textSecondary);
   background: var(--color-background);
@@ -1232,11 +1458,17 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer-left {
   flex: 1 1 auto;
   min-width: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-mempool-label {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .footer-mempool-label {
   color: var(--color-textSecondary);
   flex-shrink: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-mempool-value {
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .footer-mempool-value {
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
@@ -1259,7 +1491,9 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn {
   background: var(--color-cardBackground);
   color: var(--color-text);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn:hover {
   background: var(--color-border);
@@ -1417,6 +1651,160 @@ html
   margin: -6px 0 var(--space-medium) 0;
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-amount-row {
+  display: flex;
+  gap: var(--space-small);
+  align-items: stretch;
+  margin-bottom: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-amount-input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-max-btn {
+  flex-shrink: 0;
+  padding: var(--space-small) var(--space-medium);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+  background: var(--color-cardBackground);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+  height: 38px;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-max-btn:hover:not(:disabled) {
+  background: var(--color-border);
+  border-color: var(--color-primary);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-max-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-strategy {
+  margin-bottom: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-textSecondary);
+  margin-bottom: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .fee-strategy-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .fee-strategy-rate {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-btn {
+  padding: var(--space-small) var(--space-medium);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+  background: var(--color-cardBackground);
+  color: var(--color-primary);
+  cursor: pointer;
+  width: 22%;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s;
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-fee-btn:hover:not(:disabled) {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-fee-btn.selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-textOnPrimary);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-fee-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-row {
+  font-size: var(--font-size-sm);
+  color: var(--color-textSecondary);
+  margin-bottom: var(--space-small);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-small);
+  font-size: var(--font-size-sm);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-label {
+  color: var(--color-textSecondary);
+  flex-shrink: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-fiat {
+  font-family: var(--font-body, sans-serif);
+  color: var(--color-textSecondary);
+  font-size: var(--font-size-xs);
+  margin-left: 4px;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total {
+  border-top: 1px solid var(--color-border);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total .send-summary-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total .send-summary-value {
+  font-weight: var(--font-weight-semibold);
+}
+html
+  body[data-sveltekit-preload-data="hover"]
+  .popup-root
+  .send-summary-value.invalid {
+  color: var(--color-error);
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .send-total-warn {
+  margin: 0 0 var(--space-small);
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .send-address-row {
   display: flex;

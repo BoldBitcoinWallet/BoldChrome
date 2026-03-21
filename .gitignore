@@ -28,3 +28,21 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test / coverage
+coverage
+
+# TypeScript
+*.tsbuildinfo
+
+# Editor (optional – remove if you commit shared settings)
+.idea
+*.swp
+*.swo

@@ -244,7 +244,19 @@ export interface DerivedAddress {
   path: string;
   index: number;
   type: 'legacy' | 'segwit-nested' | 'segwit-native';
+  chain?: 'receive' | 'change';
 }
+
+export interface HdState {
+  externalIndex: number;
+  changeIndex: number;
+  maxUsedExternal: number;
+  discoveryDone: boolean;
+  discoveryLastAt: number;
+  addressType: 'segwit-native' | 'segwit-nested' | 'legacy';
+}
+
+export const GAP_LIMIT = 5;
 
 export interface HDWalletConfig {
   publicKey: string; // Extended public key (base58)
@@ -264,13 +276,15 @@ class HDWalletService {
     config: HDWalletConfig,
     addressType: 'legacy' | 'segwit-nested' | 'segwit-native',
     count: number = 20,
-    startIndex: number = 0
+    startIndex: number = 0,
+    chain: 0 | 1 = 0
   ): DerivedAddress[] {
     const network = config.network === 'mainnet'
       ? bitcoin.networks.bitcoin
       : bitcoin.networks.testnet;
     const coinType = config.network === 'testnet' ? 1 : 0;
     const basePath = this.getBasePath(addressType);
+    const chainLabel: 'receive' | 'change' = chain === 0 ? 'receive' : 'change';
 
     const addresses: DerivedAddress[] = [];
 
@@ -283,13 +297,14 @@ class HDWalletService {
       const accountNode = root.derive(bipPath).derive(coinType).derive(0);
 
       for (let i = startIndex; i < startIndex + count; i++) {
-        const child = accountNode.derive(0).derive(i);
+        const child = accountNode.derive(chain).derive(i);
         const address = this.getAddress(child, addressType, network);
         addresses.push({
           address,
-          path: `${basePath}/0/${i}`,
+          path: `${basePath}/${chain}/${i}`,
           index: i,
-          type: addressType
+          type: addressType,
+          chain: chainLabel
         });
       }
     } catch (error) {
@@ -394,6 +409,71 @@ class HDWalletService {
       legacy: this.deriveAddresses(config, 'legacy', countPerType),
       segwitNested: this.deriveAddresses(config, 'segwit-nested', countPerType),
       segwitNative: this.deriveAddresses(config, 'segwit-native', countPerType)
+    };
+  }
+
+  /**
+   * Derive all HD addresses for a given address type up to the known indexes.
+   * Returns both receive (0..externalEnd) and change (0..changeEnd) addresses.
+   */
+  deriveHdAddresses(
+    config: HDWalletConfig,
+    addressType: 'legacy' | 'segwit-nested' | 'segwit-native',
+    externalEnd: number,
+    changeEnd: number
+  ): DerivedAddress[] {
+    const receive = this.deriveAddresses(config, addressType, externalEnd + 1, 0, 0);
+    const change = changeEnd >= 0
+      ? this.deriveAddresses(config, addressType, changeEnd + 1, 0, 1)
+      : [];
+    return [...receive, ...change];
+  }
+
+  /**
+   * Gap-limit discovery: scan the blockchain to find all used addresses.
+   * Returns discovered indexes. Matches mobile's discoverHdIndexesForNetwork.
+   */
+  async discoverIndexes(
+    config: HDWalletConfig,
+    addressType: 'legacy' | 'segwit-nested' | 'segwit-native',
+    getAddressStats: (address: string) => Promise<{ tx_count: number }>,
+    onProgress?: (chain: 'receive' | 'change', index: number) => void
+  ): Promise<{ maxUsedExternal: number; externalNext: number; changeNext: number }> {
+    let maxUsedExternal = -1;
+    let maxUsedChange = -1;
+
+    // External (receive) chain
+    let consecutiveUnused = 0;
+    for (let i = 0; consecutiveUnused < GAP_LIMIT; i++) {
+      const [addr] = this.deriveAddresses(config, addressType, 1, i, 0);
+      onProgress?.('receive', i);
+      const stats = await getAddressStats(addr.address);
+      if (stats.tx_count > 0) {
+        maxUsedExternal = i;
+        consecutiveUnused = 0;
+      } else {
+        consecutiveUnused++;
+      }
+    }
+
+    // Internal (change) chain
+    consecutiveUnused = 0;
+    for (let i = 0; consecutiveUnused < GAP_LIMIT; i++) {
+      const [addr] = this.deriveAddresses(config, addressType, 1, i, 1);
+      onProgress?.('change', i);
+      const stats = await getAddressStats(addr.address);
+      if (stats.tx_count > 0) {
+        maxUsedChange = i;
+        consecutiveUnused = 0;
+      } else {
+        consecutiveUnused++;
+      }
+    }
+
+    return {
+      maxUsedExternal,
+      externalNext: Math.max(0, maxUsedExternal + 1),
+      changeNext: Math.max(0, maxUsedChange + 1),
     };
   }
 }
