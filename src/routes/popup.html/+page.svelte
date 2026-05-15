@@ -5693,44 +5693,5 @@
     padding: 8px 14px;
   }
 
-  /* Expanded / full-tab view: allow the app to fill the browser tab.
-     Placed last so it wins over the fixed 380px popup rules above. */
-  @media (min-width: 601px) {
-    /* Match app.css specificity so this isn’t overridden by critical header rules */
-    :global(html body[data-sveltekit-preload-data="hover"] .app-header) {
-      left: 50% !important;
-      right: auto !important;
-      transform: translateX(-50%) !important;
-    }
-    :global(html) {
-      width: 100% !important;
-      min-height: 100vh !important;
-      height: auto !important;
-      overflow-y: auto !important;
-      overflow-x: hidden !important;
-      display: flex !important;
-      justify-content: center !important;
-      background: var(--color-background);
-    }
-    :global(body) {
-      width: 100% !important;
-      max-width: 900px !important;
-      min-height: 100vh !important;
-      height: auto !important;
-      margin: 0 !important;
-      overflow-y: auto !important;
-      overflow-x: hidden !important;
-    }
-    :global(body[data-sveltekit-preload-data="hover"]) {
-      width: 100% !important;
-      max-width: 900px !important;
-    }
-    .wallet {
-      max-width: 900px;
-      overflow: visible;
-    }
-    .popup-root {
-      overflow: visible;
-    }
-  }
+  /* Expanded / full-tab (min-width: 601px): full-bleed background + centered column — see static/app.css */
 </style>

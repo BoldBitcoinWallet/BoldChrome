@@ -167,7 +167,7 @@ html
  * Extension action popup (narrow ~380px): Chrome chooses window size and caps height (~600px).
  * Manifest cannot set popup dimensions. A large html/body min-height only grows the document past
  * the window → useless outer scrollbar. Pin the shell to the viewport (up to 600px) and scroll
- * inside .app-content. Full-tab view is min-width: 601px and uses 100vh in +page.svelte.
+ * inside .app-content. Full-tab view is min-width: 601px (see wide rules below).
  */
 @media (max-width: 600px) {
   html {
@@ -332,12 +332,76 @@ html body[data-sveltekit-preload-data="hover"] .app-header-right {
   width: auto !important;
 }
 
-/* Full-tab / wide viewport: center fixed header (same breakpoint as popup page) */
+/* Full-tab / wide viewport (opened as tab / wide window): full-bleed page background */
 @media (min-width: 601px) {
+  html {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    height: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
+    background-color: var(--color-background);
+    background-image:
+      radial-gradient(
+        ellipse 125% 100% at 12% -12%,
+        color-mix(in srgb, var(--color-secondary) 16%, transparent) 0%,
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 90% 82% at 96% 4%,
+        color-mix(in srgb, var(--color-accent) 10%, transparent) 0%,
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 72% 55% at 48% 108%,
+        color-mix(in srgb, var(--color-primary) 7%, transparent) 0%,
+        transparent 58%
+      );
+  }
+
+  html body[data-sveltekit-preload-data="hover"] {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    height: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    background: transparent !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  html body[data-sveltekit-preload-data="hover"] .popup-root {
+    max-width: 900px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    overflow: visible !important;
+  }
+
+  html body[data-sveltekit-preload-data="hover"] .popup-root .wallet {
+    max-width: 900px !important;
+    overflow: visible !important;
+  }
+
   html body[data-sveltekit-preload-data="hover"] .app-header {
     left: 50% !important;
     right: auto !important;
     transform: translateX(-50%) !important;
+    max-width: 900px !important;
+    width: 100% !important;
+  }
+
+  html body[data-sveltekit-preload-data="hover"] .popup-root .app-header {
+    max-width: 900px !important;
+    width: 100% !important;
   }
 }
 
