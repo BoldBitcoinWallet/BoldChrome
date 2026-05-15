@@ -29,6 +29,7 @@
     getCurrentReceiveAddress,
     runHdDiscovery,
     switchAddressType,
+    addressTypeUISelection,
   } from "$lib/stores/wallet";
   import { qr } from "$lib/services/qr";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
@@ -49,6 +50,7 @@
     PIN_MAX_LENGTH,
   } from "$lib/services/pin";
   import lockerIcon from "$lib/assets/locker-icon.png";
+  import { keyshareFingerprint as computeKeyshareFingerprint } from "$lib/services/keyshareFingerprint";
 
   // PIN lock state
   let pinHash: string | null = null;
@@ -160,6 +162,10 @@
   $: isPaired =
     !!$walletStore.publicKey && $walletStore.publicKey.trim() !== "";
 
+  $: keyshareFingerprintDisplay = computeKeyshareFingerprint(
+    $walletStore.publicKey,
+  );
+
   // Debug logging
   $: console.log("[popup.html] Wallet state:", {
     publicKey: $walletStore.publicKey?.substring(0, 20) + "...",
@@ -180,8 +186,8 @@
   let balance = 0; // Will be populated from store
   let fiat = 0; // Will be populated from store
   let showBalance = true; // toggle to hide/show balance
+  let showWalletSettingsMenu = false;
   let isRefreshing = false;
-  let showAddressDropdown = false;
   let requestingAddresses = false;
 
   // Mempool provider: null = not chosen (show preference after pairing), '' = default, string = custom URL. 'loading' = init.
@@ -360,6 +366,26 @@
     applyTheme(next);
   }
 
+  function toggleWalletSettingsMenu() {
+    showWalletSettingsMenu = !showWalletSettingsMenu;
+  }
+
+  function closeWalletSettingsMenu() {
+    showWalletSettingsMenu = false;
+  }
+
+  function handleWalletSettingsEscape(e: KeyboardEvent) {
+    if (showWalletSettingsMenu && e.key === "Escape") {
+      e.preventDefault();
+      closeWalletSettingsMenu();
+    }
+  }
+
+  async function onSettingsSyncAddresses() {
+    closeWalletSettingsMenu();
+    await handleRequestAddresses();
+  }
+
   async function handleUnpair() {
     if (
       !confirm(
@@ -367,6 +393,7 @@
       )
     )
       return;
+    showWalletSettingsMenu = false;
     await resetWallet();
     pairingStep = 0;
     pairingStatus = "Click logo to start pairing";
@@ -432,11 +459,10 @@
 
   // Convert wallet transactions to UI format (app-aligned: status, amount, address, txid, time)
   $: btcRate = btcRateForFiat;
-  $: activeAddressTypeId = $walletStore.hdState?.addressType || "segwit-native";
-  $: selectedAddressType = (() => {
-    const t = ADDRESS_TYPES.find((a) => a.id === activeAddressTypeId);
-    return t?.label || "Native SegWit";
-  })();
+  $: activeAddressTypeId =
+    $walletStore.hdState?.addressType || "segwit-native";
+  $: settingsHighlightedAddressType =
+    $addressTypeUISelection ?? activeAddressTypeId;
   $: selectedAddressShort = (() => {
     if (!$walletStore.address) return "";
     const raw = $walletStore.address;
@@ -677,6 +703,20 @@
       toastType = "";
       toastTimer = null;
     }, 3200);
+  }
+
+  async function copyWalletFingerprint() {
+    const id = keyshareFingerprintDisplay;
+    if (!id || id === "N/A") {
+      triggerToast("No Fingerprint to copy", "error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(id);
+      triggerToast("Fingerprint copied", "success");
+    } catch {
+      triggerToast("Could not copy", "error");
+    }
   }
   let showQRModal = false;
   let qrCodeDataUrl = "";
@@ -950,23 +990,26 @@
     { id: "legacy" as const, label: "Legacy", prefix: "1..." },
   ];
 
-  let switchingAddressType = false;
-
-  function toggleAddressDropdown() {
-    showAddressDropdown = !showAddressDropdown;
-  }
-
   async function handleSelectAddressType(
     typeId: "segwit-native" | "segwit-nested" | "legacy",
   ) {
-    showAddressDropdown = false;
-    const current = $walletStore.hdState?.addressType;
-    if (current === typeId) return;
-    switchingAddressType = true;
+    const current = get(walletStore).hdState?.addressType;
+    if (current === typeId) {
+      closeWalletSettingsMenu();
+      return;
+    }
+
     try {
       await switchAddressType(typeId);
-    } finally {
-      switchingAddressType = false;
+      closeWalletSettingsMenu();
+    } catch (e) {
+      console.error("Address type switch failed:", e);
+      triggerToast(
+        e instanceof Error
+          ? e.message
+          : "Could not switch address format. Try again.",
+        "error",
+      );
     }
   }
 
@@ -1373,6 +1416,7 @@
   });
 </script>
 
+<svelte:window on:keydown={handleWalletSettingsEscape} />
 <div
   class="popup-root"
   class:unpaired={!isPaired && !showCameraPermissionScreen}
@@ -1529,22 +1573,6 @@
             </svg>
           </button>
         {/if}
-        <button
-          class="theme-toggle"
-          on:click={toggleTheme}
-          title={$themeName === "darkPolished"
-            ? "Switch to light"
-            : "Switch to dark"}
-          aria-label="Toggle theme"
-        >
-          <img
-            src={$themeName === "darkPolished" ? lightIcon : darkIcon}
-            alt=""
-            class="header-icon theme-toggle-icon"
-            width="20"
-            height="20"
-          />
-        </button>
         {#if showMainApp}
           <button
             type="button"
@@ -1591,15 +1619,40 @@
             />
           </button>
           <button
-            class="unpair-btn"
-            on:click={handleUnpair}
-            title="Unpair wallet"
-            aria-label="Unpair wallet and return to setup"
+            type="button"
+            class="wallet-settings-btn"
+            on:click={toggleWalletSettingsMenu}
+            title="Wallet details and settings"
+            aria-label="Wallet details and settings"
+            aria-expanded={showWalletSettingsMenu}
+            aria-haspopup="dialog"
+          >
+            <svg
+              class="header-icon wallet-settings-icon"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+        {:else if isPaired || pairingStep > 0}
+          <button
+            class="theme-toggle"
+            on:click={toggleTheme}
+            title={$themeName === "darkPolished"
+              ? "Switch to light"
+              : "Switch to dark"}
+            aria-label="Toggle theme"
           >
             <img
-              src={deleteIcon}
+              src={$themeName === "darkPolished" ? lightIcon : darkIcon}
               alt=""
-              class="header-icon unpair-icon"
+              class="header-icon theme-toggle-icon"
               width="20"
               height="20"
             />
@@ -1607,6 +1660,155 @@
         {/if}
       </span>
     </header>
+  {/if}
+
+  {#if showWalletSettingsMenu && showMainApp}
+    <button
+      type="button"
+      class="wallet-settings-backdrop"
+      on:click={closeWalletSettingsMenu}
+      aria-label="Close wallet settings"></button>
+    <div
+      id="wallet-settings-panel"
+      class="wallet-settings-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wallet-settings-title"
+      tabindex="-1"
+      on:click|stopPropagation
+      on:keydown|stopPropagation
+    >
+      <div class="wallet-settings-head">
+        <h2 id="wallet-settings-title" class="wallet-settings-title">
+          Wallet details
+        </h2>
+        <button
+          type="button"
+          class="wallet-settings-close"
+          on:click={closeWalletSettingsMenu}
+          aria-label="Close wallet settings"
+        >✕</button>
+      </div>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Fingerprint</h3>
+        <p class="wallet-settings-hint">
+          Short fingerprint for this wallet
+        </p>
+        <div class="wallet-settings-fingerprint-row">
+          <span class="wallet-settings-fingerprint-value">
+            {keyshareFingerprintDisplay}
+          </span>
+          <button
+            type="button"
+            class="wallet-id-copy"
+            on:click={copyWalletFingerprint}
+            disabled={keyshareFingerprintDisplay === "N/A"}
+            title="Copy fingerprint"
+            aria-label="Copy fingerprint"
+          >
+            Copy
+          </button>
+        </div>
+      </section>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Appearance</h3>
+        <div class="wallet-settings-row">
+          <span class="wallet-settings-row-text">
+            {$themeName === "darkPolished" ? "Dark theme" : "Light theme"}
+          </span>
+          <button
+            type="button"
+            class="wallet-settings-theme-btn"
+            on:click={toggleTheme}
+            title={$themeName === "darkPolished"
+              ? "Switch to light mode"
+              : "Switch to dark mode"}
+          >
+            <img
+              src={$themeName === "darkPolished" ? lightIcon : darkIcon}
+              alt=""
+              class="header-icon"
+              width="20"
+              height="20"
+            />
+          </button>
+        </div>
+      </section>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Receiving address format</h3>
+        {#if selectedAddressShort}
+          <p class="wallet-settings-address-preview">{selectedAddressShort}</p>
+        {/if}
+        {#if $walletStore.publicKey}
+          {#if $addressTypeUISelection}
+            <p class="wallet-settings-switching" aria-live="polite">
+              Switching to {$addressTypeUISelection === "segwit-native"
+                ? "Native SegWit"
+                : $addressTypeUISelection === "segwit-nested"
+                  ? "SegWit compatible"
+                  : "Legacy"}… fetching addresses
+            </p>
+          {/if}
+          <ul class="wallet-settings-address-list">
+            {#each ADDRESS_TYPES as atype}
+              <li>
+                <button
+                  type="button"
+                  class="address-item wallet-settings-address-item"
+                  class:active={settingsHighlightedAddressType === atype.id}
+                  disabled={!!$addressTypeUISelection}
+                  on:click={() => handleSelectAddressType(atype.id)}
+                >
+                  <img
+                    src={addressTypeIcon}
+                    alt=""
+                    class="address-type-icon"
+                    width="18"
+                    height="18"
+                  />
+                  <div class="address-info">
+                    <div class="address-text">{atype.label}</div>
+                    <div class="address-prefix">{atype.prefix}</div>
+                  </div>
+                  {#if settingsHighlightedAddressType === atype.id}
+                    <span class="address-check">✓</span>
+                  {/if}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <button
+            type="button"
+            class="wallet-settings-sync-btn"
+            disabled={requestingAddresses}
+            on:click={onSettingsSyncAddresses}
+          >
+            {requestingAddresses ? "Opening…" : "Sync addresses from mobile"}
+          </button>
+        {/if}
+      </section>
+
+      <section class="wallet-settings-block wallet-settings-danger">
+        <button
+          type="button"
+          class="wallet-settings-unpair-btn"
+          on:click={handleUnpair}
+        >
+          <img
+            src={deleteIcon}
+            alt=""
+            class="wallet-settings-unpair-icon"
+            width="18"
+            height="18"
+          />
+          Unpair wallet
+        </button>
+      </section>
+    </div>
   {/if}
 
   <!-- Global toast (always visible when message set, regardless of paired/unpaired) -->
@@ -1997,82 +2199,6 @@
                 <div class="fiat placeholder fade-in">●●●●●●●</div>
               {/if}
             </div>
-          </section>
-
-          <section class="address-selector">
-            {#if $walletStore.publicKey}
-              <div class="address-selector-inner">
-                <button
-                  class="dropdown-toggle"
-                  on:click={toggleAddressDropdown}
-                  disabled={switchingAddressType}
-                >
-                  <span class="address-toggle-left">
-                    <img
-                      src={addressTypeIcon}
-                      alt=""
-                      class="address-type-icon"
-                      width="18"
-                      height="18"
-                    />
-                    <span class="address-type-label">
-                      {#if switchingAddressType}
-                        Switching...
-                      {:else}
-                        {selectedAddressType}
-                      {/if}
-                    </span>
-                  </span>
-                  <span class="address-toggle-right">
-                    <span class="address-display">{selectedAddressShort}</span>
-                    <span
-                      class="dropdown-arrow"
-                      class:open={showAddressDropdown}>▼</span
-                    >
-                  </span>
-                </button>
-              </div>
-            {:else}
-              <button
-                class="sync-addresses"
-                on:click={handleRequestAddresses}
-                disabled={requestingAddresses}
-              >
-                {requestingAddresses ? "Requesting..." : "Sync from Mobile"}
-              </button>
-            {/if}
-
-            {#if showAddressDropdown}
-              <div class="address-dropdown">
-                <div class="dropdown-header">
-                  <span>Address Type</span>
-                </div>
-                <ul class="address-list">
-                  {#each ADDRESS_TYPES as atype}
-                    <button
-                      class="address-item"
-                      class:active={activeAddressTypeId === atype.id}
-                      on:click={() => handleSelectAddressType(atype.id)}
-                    >
-                      <img
-                        src={addressTypeIcon}
-                        alt=""
-                        class="address-type-icon"
-                        width="18"
-                        height="18"
-                      />
-                      <div class="address-info">
-                        <div class="address-text">{atype.label}</div>
-                        <div class="address-prefix">{atype.prefix}</div>
-                      </div>
-                      {#if activeAddressTypeId === atype.id}
-                        <span class="address-check">✓</span>
-                      {/if}
-                    </button>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
           </section>
 
           <section class="actions-row">
@@ -2820,6 +2946,326 @@
     min-height: 44px;
     min-width: 0;
   }
+
+  .wallet-settings-backdrop {
+    position: fixed;
+    top: calc(20px + 48px);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-width: 380px;
+    margin: 0 auto;
+    z-index: 19;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.28);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .wallet-settings-sheet {
+    position: fixed;
+    top: calc(20px + 48px + 6px);
+    left: 12px;
+    right: 12px;
+    width: calc(100% - 24px);
+    max-width: 356px;
+    margin: 0 auto;
+    z-index: 21;
+    max-height: calc(100vh - 20px - 48px - 28px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--color-cardBackground);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+    padding: 0 0 12px;
+    box-sizing: border-box;
+  }
+
+  .wallet-settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 12px 8px;
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    background: var(--color-cardBackground);
+    z-index: 1;
+  }
+
+  .wallet-settings-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .wallet-settings-close {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-textSecondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+
+  .wallet-settings-close:hover {
+    background: var(--color-background);
+    color: var(--color-text);
+  }
+
+  .wallet-settings-block {
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-block:last-child {
+    border-bottom: none;
+  }
+
+  .wallet-settings-label {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-textSecondary);
+  }
+
+  .wallet-settings-hint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--color-textSecondary);
+  }
+
+  .wallet-settings-fingerprint-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: color-mix(
+      in srgb,
+      var(--color-background) 70%,
+      var(--color-cardBackground)
+    );
+    min-width: 0;
+  }
+
+  .wallet-settings-fingerprint-value {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .wallet-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .wallet-settings-row-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .wallet-settings-theme-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-background);
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      transform 0.15s;
+  }
+
+  .wallet-settings-theme-btn:hover {
+    border-color: var(--color-primary);
+    transform: scale(1.04);
+  }
+
+  .wallet-settings-theme-btn img {
+    display: block;
+    opacity: 0.95;
+  }
+
+  .wallet-settings-address-preview {
+    margin: 0 0 8px;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--color-textSecondary);
+    word-break: break-all;
+    text-align: center;
+    padding: 6px 8px;
+    background: var(--color-background);
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-switching {
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-textSecondary);
+    text-align: center;
+    padding: 8px;
+  }
+
+  .wallet-settings-address-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .wallet-settings-address-list li {
+    margin: 0;
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item {
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item:disabled {
+    opacity: 0.58;
+    cursor: wait;
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item:last-child {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-sync-btn {
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--color-primary);
+    color: var(--color-textOnPrimary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }
+
+  .wallet-settings-sync-btn:hover:not(:disabled) {
+    filter: brightness(0.95);
+  }
+
+  .wallet-settings-sync-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .wallet-settings-danger {
+    padding-top: 8px;
+  }
+
+  .wallet-settings-unpair-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--color-error) 10%,
+      var(--color-cardBackground)
+    );
+    color: var(--color-error);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
+  }
+
+  .wallet-settings-unpair-btn:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-error) 16%,
+      var(--color-cardBackground)
+    );
+    border-color: var(--color-error);
+  }
+
+  .wallet-settings-unpair-icon {
+    display: block;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  :global([data-theme="darkPolished"]) .wallet-settings-unpair-icon {
+    filter: brightness(0) invert(1);
+    opacity: 0.9;
+  }
+
+  .wallet-id-copy {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: var(--color-cardBackground);
+    color: var(--color-textSecondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .wallet-id-copy:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+    background: var(--color-background);
+  }
+
+  .wallet-id-copy:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
   .balance-loading {
     display: flex;
     align-items: center;
@@ -2905,7 +3351,7 @@
   .app-header .refresh-btn,
   .app-header .balance-visibility-btn,
   .app-header .expand-btn,
-  .app-header .unpair-btn {
+  .app-header .wallet-settings-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2926,7 +3372,7 @@
   .app-header .refresh-btn:hover:not(:disabled),
   .app-header .balance-visibility-btn:hover,
   .app-header .expand-btn:hover,
-  .app-header .unpair-btn:hover {
+  .app-header .wallet-settings-btn:hover {
     background: var(--color-border);
     transform: scale(1.05);
   }
@@ -2934,7 +3380,7 @@
   .app-header .refresh-btn:active,
   .app-header .balance-visibility-btn:active,
   .app-header .expand-btn:active,
-  .app-header .unpair-btn:active {
+  .app-header .wallet-settings-btn:active {
     transform: scale(0.98);
   }
   .app-header .refresh-btn:disabled {
@@ -3102,7 +3548,6 @@
     flex-shrink: 0;
     opacity: 0.9;
   }
-  :global([data-theme="darkPolished"]) .address-selector .address-type-icon,
   :global([data-theme="darkPolished"]) .address-item .address-type-icon {
     filter: brightness(0) invert(1);
     opacity: 0.95;
@@ -4006,6 +4451,35 @@
 
   .qr-modal {
     max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .qr-modal h3 {
+    text-align: center;
+    width: 100%;
+  }
+
+  .qr-modal .qr-container {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .qr-modal .modal-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Pairing UI later sets `.qr-code { display: flex }` for div wrappers; the send
+   * modal uses `<img class="qr-code">` — override with higher specificity so the
+   * image centers reliably. */
+  .qr-modal .qr-container img {
+    display: block;
+    margin-inline: auto;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-small, 8px);
   }
 
   .qr-container {
@@ -4017,12 +4491,6 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-small, 8px);
     margin: 16px 0;
-  }
-
-  .qr-code {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--radius-small, 8px);
   }
 
   .qr-instructions {

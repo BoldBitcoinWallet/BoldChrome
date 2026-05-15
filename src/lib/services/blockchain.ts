@@ -3,8 +3,6 @@
  * Fetches Bitcoin blockchain data from mempool.space API
  */
 
-import { writable } from 'svelte/store';
-
 export interface UTXO {
   txid: string;
   vout: number;
@@ -87,6 +85,50 @@ const DEFAULT_MAINNET_API = 'https://mempool.space/api';
 const DEFAULT_TESTNET_API = 'https://mempool.space/testnet/api';
 const FETCH_TIMEOUT_MS = 5000;
 
+/** Minimum pause between uncached Esplora address calls (stats / utxo / txs) — reduces 429s (see BoldWallet INTER_ADDRESS_DELAY_MS). */
+const ESPLORA_INTER_REQUEST_GAP_MS = 320;
+
+/** When server omits Retry-After on 429 (BoldWallet RATE_LIMIT_DELAY_MS). */
+const RATE_LIMIT_DEFAULT_BACKOFF_MS = 5_000;
+
+/** Extra attempts after 429 (BoldWallet MAX_429_RETRIES = 2 → 3 tries total). */
+const MAX_429_RETRIES = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Parse Retry-After header: integer seconds or HTTP-date → seconds (1–120) or null.
+ */
+function parseRetryAfterSeconds(header: string | null): number | null {
+  if (header == null || header.trim() === '') return null;
+  const trimmed = header.trim();
+  const asNum = parseInt(trimmed, 10);
+  if (!Number.isNaN(asNum) && asNum > 0)
+    return Math.min(120, Math.max(1, asNum));
+  const ts = Date.parse(trimmed);
+  if (!Number.isNaN(ts)) {
+    const sec = Math.ceil((ts - Date.now()) / 1000);
+    return sec > 0 ? Math.min(120, sec) : null;
+  }
+  return null;
+}
+
+function userFacingHttpError(status: number, apiKind: string): string {
+  if (status === 429) {
+    return `Too many requests (${apiKind}): explorer API asked us to slow down (HTTP 429). Wait a minute, then retry — or switch to your own mempool/explorer URL under settings if this keeps happening.`;
+  }
+  if (status === 503 || status === 502) {
+    return `Explorer (${apiKind}) is temporarily unavailable (HTTP ${status}). Try again in a moment.`;
+  }
+  return `Explorer API (${apiKind}) failed (HTTP ${status}).`;
+}
+
+async function consumeBodyQuietly(res: Response): Promise<void> {
+  await res.text().catch(() => {});
+}
+
 function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -105,6 +147,74 @@ class BlockchainService {
   private txCache = new Map<string, { data: Transaction; timestamp: number }>();
   private utxoCache = new Map<string, { data: UTXO[]; timestamp: number }>();
   private readonly CACHE_TTL = 30000; // 30 seconds
+
+  /**
+   * Serialize Esplora address-family calls and add a small gap between them
+   * (mirrors BoldWallet ApiQueue + INTER_ADDRESS_DELAY_MS behavior).
+   */
+  private exploraConcurrencyChain: Promise<void> = Promise.resolve();
+  private exploraLastRequestDoneAt = 0;
+
+  private async withExploraAddressSerialized<T>(
+    worker: () => Promise<T>,
+  ): Promise<T> {
+    const prev = this.exploraConcurrencyChain;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    this.exploraConcurrencyChain = gate;
+    await prev;
+
+    if (this.exploraLastRequestDoneAt > 0) {
+      const gap = Math.max(
+        0,
+        ESPLORA_INTER_REQUEST_GAP_MS -
+          (Date.now() - this.exploraLastRequestDoneAt),
+      );
+      if (gap > 0) await sleep(gap);
+    }
+
+    try {
+      return await worker();
+    } finally {
+      this.exploraLastRequestDoneAt = Date.now();
+      release();
+    }
+  }
+
+  private async fetchJsonWith429Retries<T>(
+    url: string,
+    apiKind: string,
+  ): Promise<T> {
+    let lastStatus = 0;
+    for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+      const response = await fetchWithTimeout(url);
+      if (response.ok) {
+        return (await response.json()) as T;
+      }
+      lastStatus = response.status;
+      await consumeBodyQuietly(response);
+
+      if (response.status === 429 && attempt < MAX_429_RETRIES) {
+        const ra = parseRetryAfterSeconds(
+          response.headers.get('Retry-After'),
+        );
+        const waitMs =
+          ra != null
+            ? Math.min(120_000, Math.max(500, ra * 1000))
+            : RATE_LIMIT_DEFAULT_BACKOFF_MS;
+        console.warn(
+          `[Blockchain] ${apiKind} rate limited (429), waiting ${waitMs}ms (attempt ${attempt + 1}/${MAX_429_RETRIES})`,
+        );
+        await sleep(waitMs);
+        continue;
+      }
+
+      throw new Error(userFacingHttpError(response.status, apiKind));
+    }
+    throw new Error(userFacingHttpError(lastStatus, apiKind));
+  }
 
   setNetwork(network: 'mainnet' | 'testnet') {
     this.network = network;
@@ -143,7 +253,6 @@ class BlockchainService {
    * Fetch address statistics
    */
   async getAddressStats(address: string): Promise<AddressStats> {
-    // Check cache
     const cached = this.addressCache.get(address);
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
       console.log('[Blockchain] Using cached address stats');
@@ -154,16 +263,10 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/address/${address}`;
 
     try {
-      const response = await fetchWithTimeout(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // Cache the result
+      const data = await this.withExploraAddressSerialized(() =>
+        this.fetchJsonWith429Retries<AddressStats>(url, 'address stats'),
+      );
       this.addressCache.set(address, { data, timestamp: Date.now() });
-      
       return data;
     } catch (error) {
       console.error('[Blockchain] Error fetching address stats:', error);
@@ -195,7 +298,6 @@ class BlockchainService {
    * Fetch UTXOs for an address
    */
   async getUTXOs(address: string): Promise<UTXO[]> {
-    // Check cache
     const cached = this.utxoCache.get(address);
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
       console.log('[Blockchain] Using cached UTXOs');
@@ -206,16 +308,10 @@ class BlockchainService {
     const url = `${this.getBaseUrl()}/address/${address}/utxo`;
 
     try {
-      const response = await fetchWithTimeout(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // Cache the result
+      const data = await this.withExploraAddressSerialized(() =>
+        this.fetchJsonWith429Retries<UTXO[]>(url, 'UTXOs'),
+      );
       this.utxoCache.set(address, { data, timestamp: Date.now() });
-      
       return data;
     } catch (error) {
       console.error('[Blockchain] Error fetching UTXOs:', error);
@@ -228,20 +324,16 @@ class BlockchainService {
    */
   async getTransactions(address: string, afterTxid?: string): Promise<Transaction[]> {
     console.log('[Blockchain] Fetching transactions for:', address);
-    
+
     let url = `${this.getBaseUrl()}/address/${address}/txs`;
     if (afterTxid) {
       url += `/chain/${afterTxid}`;
     }
 
     try {
-      const response = await fetchWithTimeout(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
+      return await this.withExploraAddressSerialized(() =>
+        this.fetchJsonWith429Retries<Transaction[]>(url, 'transactions'),
+      );
     } catch (error) {
       console.error('[Blockchain] Error fetching transactions:', error);
       throw error;

@@ -289,7 +289,7 @@ html
   body[data-sveltekit-preload-data="hover"]
   .app-header
   .balance-visibility-btn,
-html body[data-sveltekit-preload-data="hover"] .app-header .unpair-btn {
+html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -318,7 +318,7 @@ html
   body[data-sveltekit-preload-data="hover"]
   .app-header
   .balance-visibility-btn:hover,
-html body[data-sveltekit-preload-data="hover"] .app-header .unpair-btn:hover {
+html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn:hover {
   background: var(--color-border);
   transform: scale(1.05);
 }
@@ -328,7 +328,7 @@ html
   body[data-sveltekit-preload-data="hover"]
   .app-header
   .balance-visibility-btn:active,
-html body[data-sveltekit-preload-data="hover"] .app-header .unpair-btn:active {
+html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn:active {
   transform: scale(0.98);
 }
 html
