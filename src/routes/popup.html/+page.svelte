@@ -1663,21 +1663,24 @@
   {/if}
 
   {#if showWalletSettingsMenu && showMainApp}
-    <button
-      type="button"
-      class="wallet-settings-backdrop"
-      on:click={closeWalletSettingsMenu}
-      aria-label="Close wallet settings"></button>
     <div
-      id="wallet-settings-panel"
-      class="wallet-settings-sheet"
+      class="modal mempool-modal"
       role="dialog"
       aria-modal="true"
       aria-labelledby="wallet-settings-title"
       tabindex="-1"
-      on:click|stopPropagation
-      on:keydown|stopPropagation
+      on:click={closeWalletSettingsMenu}
+      on:keydown={(e) => e.key === "Escape" && closeWalletSettingsMenu()}
     >
+      <!-- svelte-ignore a11y_click_events_have_key_events: stop modal backdrop from receiving bubbled clicks from the panel -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <div
+        id="wallet-settings-panel"
+        class="modal-card wallet-settings-sheet"
+        role="document"
+        tabindex="-1"
+        on:click|stopPropagation
+      >
       <div class="wallet-settings-head">
         <h2 id="wallet-settings-title" class="wallet-settings-title">
           Wallet details
@@ -1808,6 +1811,7 @@
           Unpair wallet
         </button>
       </section>
+    </div>
     </div>
   {/if}
 
@@ -2947,42 +2951,20 @@
     min-width: 0;
   }
 
-  .wallet-settings-backdrop {
-    position: fixed;
-    top: calc(20px + 48px);
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-width: 380px;
-    margin: 0 auto;
-    z-index: 19;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    background: rgba(0, 0, 0, 0.28);
-    -webkit-appearance: none;
-    appearance: none;
-  }
+  /* Wallet details: full-viewport backdrop + centered card (same pattern as mempool provider modal via .modal + .mempool-modal) */
 
-  .wallet-settings-sheet {
-    position: fixed;
-    top: calc(20px + 48px + 6px);
-    left: 12px;
-    right: 12px;
-    width: calc(100% - 24px);
+  .wallet-settings-sheet.modal-card {
+    width: min(356px, 92vw);
     max-width: 356px;
-    margin: 0 auto;
-    z-index: 21;
-    max-height: calc(100vh - 20px - 48px - 28px);
+    max-height: min(560px, 85dvh);
+    margin: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    background: var(--color-cardBackground);
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
     padding: 0 0 12px;
     box-sizing: border-box;
   }
+
+
 
   .wallet-settings-head {
     display: flex;
@@ -3434,9 +3416,10 @@
   }
 
   .amount {
+    font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 22px;
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: 0.02em;
     color: var(--color-text);
     word-break: break-all;
     text-align: center;
@@ -3461,8 +3444,10 @@
   }
 
   .fiat {
+    font-family: var(--font-mono), ui-monospace, monospace;
     color: var(--color-textSecondary);
     font-size: 12px;
+    letter-spacing: 0.02em;
   }
 
   .fiat.placeholder {
@@ -4131,9 +4116,11 @@
     letter-spacing: 0.3px;
   }
   .send-balance-value {
+    font-family: var(--font-mono), ui-monospace, monospace;
     font-size: var(--font-size-base, 14px);
     font-weight: var(--font-weight-semibold, 600);
     color: var(--color-text);
+    letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
   }
   .send-balance-fiat {
