@@ -52,6 +52,30 @@
   import lockerIcon from "$lib/assets/locker-icon.png";
   import { keyshareFingerprint as computeKeyshareFingerprint } from "$lib/services/keyshareFingerprint";
 
+  function getExtensionVersionLabel(): string {
+    try {
+      const cr = (
+        globalThis as {
+          chrome?: {
+            runtime?: {
+              getManifest?: () => { version?: string; version_name?: string };
+            };
+          };
+        }
+      ).chrome;
+      if (!cr?.runtime?.getManifest) return "";
+      const m = cr.runtime.getManifest();
+      const named =
+        typeof m.version_name === "string" ? m.version_name.trim() : "";
+      if (named) return named;
+      const v = typeof m.version === "string" ? m.version.trim() : "";
+      return v ? `v${v}` : "";
+    } catch {
+      return "";
+    }
+  }
+  const extensionVersionLabel = getExtensionVersionLabel();
+
   // PIN lock state
   let pinHash: string | null = null;
   let pinChecked = false;
@@ -1838,38 +1862,45 @@
     {:else if showLockScreen}
       <!-- Lock screen: require PIN to unlock -->
       <div class="pin-screen lock-screen">
-        <div class="pin-screen-card">
-          <img
-            src={$themeName === "darkPolished" ? logoSmallDark : logo}
-            alt=""
-            class="pin-screen-logo"
-            width="56"
-            height="56"
-          />
-          <h2 class="pin-screen-title">Unlock extension</h2>
-          <p class="pin-screen-hint">Enter your PIN to continue</p>
-          <form on:submit|preventDefault={handleUnlock} class="pin-form">
-            <input
-              type="password"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              autocomplete="off"
-              placeholder="PIN"
-              bind:value={unlockPinValue}
-              class="pin-input"
-              maxlength={PIN_MAX_LENGTH}
-              aria-label="PIN"
-              aria-invalid={!!unlockError}
-              aria-describedby={unlockError ? "unlock-pin-error" : undefined}
+        <div class="lock-screen-main">
+          <div class="pin-screen-card">
+            <img
+              src={$themeName === "darkPolished" ? logoSmallDark : logo}
+              alt=""
+              class="pin-screen-logo"
+              width="56"
+              height="56"
             />
-            {#if unlockError}
-              <p id="unlock-pin-error" class="pin-error" role="alert">
-                {unlockError}
-              </p>
-            {/if}
-            <button type="submit" class="btn-primary pin-submit">Unlock</button>
-          </form>
+            <h2 class="pin-screen-title">Unlock extension</h2>
+            <p class="pin-screen-hint">Enter your PIN to continue</p>
+            <form on:submit|preventDefault={handleUnlock} class="pin-form">
+              <input
+                type="password"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                autocomplete="off"
+                placeholder="PIN"
+                bind:value={unlockPinValue}
+                class="pin-input"
+                maxlength={PIN_MAX_LENGTH}
+                aria-label="PIN"
+                aria-invalid={!!unlockError}
+                aria-describedby={unlockError ? "unlock-pin-error" : undefined}
+              />
+              {#if unlockError}
+                <p id="unlock-pin-error" class="pin-error" role="alert">
+                  {unlockError}
+                </p>
+              {/if}
+              <button type="submit" class="btn-primary pin-submit">Unlock</button>
+            </form>
+          </div>
         </div>
+        {#if extensionVersionLabel}
+          <p class="lock-screen-version" aria-label="Extension version">
+            {extensionVersionLabel}
+          </p>
+        {/if}
       </div>
     {:else if showMempoolPreferenceScreen}
       <!-- Mempool provider: choose custom or skip for default (after pairing, once) -->
@@ -2858,7 +2889,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    background: var(--color-background);
+    background: transparent;
     overflow: hidden;
     position: relative;
     box-sizing: border-box;
@@ -2884,15 +2915,21 @@
     padding: 0;
     border: none;
     border-radius: var(--radius-small);
-    background: var(--color-cardBackground);
+    background: var(--glass-pane-bg, var(--color-cardBackground));
     color: var(--color-text);
     cursor: pointer;
     transition:
       background 0.2s,
-      transform 0.2s;
+      transform 0.2s,
+      box-shadow 0.2s;
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
   }
   .lock-btn:hover {
-    background: var(--color-border);
+    background: var(--glass-pane-bg-solid, var(--color-border));
     transform: scale(1.05);
   }
   .lock-icon {
@@ -2912,7 +2949,7 @@
     min-height: 0;
     flex: 1;
     color: var(--color-text);
-    background: var(--color-background);
+    background: transparent;
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -2925,19 +2962,15 @@
     flex: 1;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 0 12px 12px;
+    padding: 0 var(--space-small) var(--space-medium);
     box-sizing: border-box;
   }
 
-  /* Balance card (app-style rounded card) */
+  /* Structural only — glass surface from app.css (.popup-root .balance-card) */
   .balance-card {
-    margin-top: 8px;
+    margin-top: 0;
     margin-bottom: 0;
     padding: 12px;
-    background: var(--color-cardBackground);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     box-sizing: border-box;
     min-width: 0;
   }
@@ -2972,10 +3005,13 @@
     justify-content: space-between;
     gap: 8px;
     padding: 12px 12px 8px;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--glass-stroke, var(--color-border));
     position: sticky;
     top: 0;
-    background: var(--color-cardBackground);
+    background: var(--glass-pane-bg, var(--color-cardBackground));
+    backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-sat, 160%));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 20px))
+      saturate(var(--glass-sat, 160%));
     z-index: 1;
   }
 
@@ -3342,20 +3378,26 @@
     padding: 0;
     border: none;
     border-radius: 8px;
-    background: var(--color-cardBackground);
+    background: var(--glass-pane-bg, var(--color-cardBackground));
     color: var(--color-text);
     cursor: pointer;
     transition:
       background 0.2s,
-      transform 0.2s;
+      transform 0.2s,
+      box-shadow 0.2s;
     font-size: 16px;
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
   }
   .app-header .theme-toggle:hover:not(:disabled),
   .app-header .refresh-btn:hover:not(:disabled),
   .app-header .balance-visibility-btn:hover,
   .app-header .expand-btn:hover,
   .app-header .wallet-settings-btn:hover {
-    background: var(--color-border);
+    background: var(--glass-pane-bg-solid, var(--color-border));
     transform: scale(1.05);
   }
   .app-header .theme-toggle:active,
@@ -3470,13 +3512,10 @@
     min-width: 0;
     width: 100%;
   }
-  /* Same width and style as balance-card so dropdown aligns */
+  /* Glass surface + chrome from app.css (.popup-root .address-selector-inner) */
   .address-selector-inner {
     padding: 12px;
-    background: var(--color-cardBackground);
-    border: 1px solid var(--color-border);
     border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     box-sizing: border-box;
     min-width: 0;
     width: 100%;
@@ -3585,8 +3624,6 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--color-cardBackground);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
     z-index: 1000;
     margin-top: 4px;
     max-height: 220px;
@@ -3597,15 +3634,16 @@
     border-color: var(--color-border);
   }
   :global([data-theme="darkPolished"]) .address-dropdown {
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 30%, transparent),
+      0 12px 40px rgba(0, 0, 0, 0.45);
     border-top: 1px solid var(--color-border);
     border-radius: 0 0 10px 10px;
     border-color: var(--color-secondary);
     padding: 4px;
   }
   :global([data-theme="darkPolished"]) .address-selector-inner {
-    background: var(--color-cardBackground);
-    border-color: var(--color-border);
+    border-color: var(--glass-stroke, var(--color-border));
   }
 
   .dropdown-header {
@@ -3873,11 +3911,11 @@
     display: block;
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid var(--color-border);
     border-radius: 10px;
-    background: var(--color-cardBackground);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-    transition: background 0.2s;
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
     animation: slideInUp 0.3s ease-out;
     min-width: 0;
     box-sizing: border-box;
@@ -3885,9 +3923,6 @@
     text-align: left;
     font: inherit;
     color: inherit;
-  }
-  .tx-item-btn:hover {
-    background: var(--color-background);
   }
 
   .tx-row {
@@ -4007,18 +4042,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-modalBackdrop);
     animation: fadeIn 0.3s ease-out;
     z-index: 1000;
   }
 
   .modal-card {
-    background: var(--color-cardBackground);
     padding: 20px;
     border-radius: var(--radius-large, 14px);
     width: 320px;
-    border: 1px solid var(--color-border);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     animation: slideInUp 0.4s ease-out;
   }
 
@@ -4520,7 +4551,6 @@
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
     padding: 12px;
-    margin-top: 20px;
     display: block !important; /* header is block; children are absolute */
   }
   .app-header-left {
@@ -4557,16 +4587,26 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    border: none;
+    border: 1px solid var(--glass-stroke, var(--color-border));
     border-radius: 8px;
-    background: var(--color-disabled);
+    background: var(--glass-pane-bg, var(--color-disabled));
     color: var(--color-text);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 35%, transparent),
+      0 2px 10px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
   }
   .header-price-btn:hover {
-    background: var(--color-border);
+    background: var(--glass-pane-bg-solid, var(--color-border));
+    border-color: var(--color-primary);
   }
   .header-price-icon {
     display: block;
@@ -4589,7 +4629,7 @@
     width: 100%;
     min-width: 0;
     margin-top: 48px;
-    padding-top: 12px;
+    padding-top: 8px;
     min-height: 0;
     box-sizing: border-box;
   }
@@ -5418,7 +5458,7 @@
 
   :global(.popup-root .app-header) {
     position: fixed !important;
-    top: 32px !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
@@ -5454,7 +5494,7 @@
     flex-direction: column;
     overflow: auto;
     margin-top: 48px !important;
-    padding-top: 16px !important;
+    padding-top: 8px !important;
     min-height: 0;
     box-sizing: border-box;
   }

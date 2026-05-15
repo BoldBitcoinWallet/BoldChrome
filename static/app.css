@@ -10,6 +10,34 @@ body {
   height: 100%;
 }
 
+/*
+ * Palette-aware glass morphism (macOS Ventura+ style): frosted surfaces use color-mix
+ * on Bold theme tokens — no new hex colors beyond what the palette already defines.
+ */
+html[data-theme='lightPolished'] {
+  --glass-blur: clamp(18px, 5vw, 28px);
+  --glass-sat: 172%;
+  --glass-pane-bg: color-mix(in srgb, var(--color-cardBackground) 56%, transparent);
+  --glass-pane-bg-solid: color-mix(in srgb, var(--color-cardBackground) 72%, transparent);
+  --glass-stroke: color-mix(in srgb, var(--color-white) 26%, transparent);
+  --glass-inset-highlight: color-mix(in srgb, var(--color-white) 45%, transparent);
+  --glass-ambient: color-mix(in srgb, var(--color-shadowColor) 7%, transparent);
+  --glass-header-bg: color-mix(in srgb, var(--color-background) 38%, transparent);
+  --glass-modal-scrim-light: color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+html[data-theme='darkPolished'] {
+  --glass-blur: clamp(22px, 5vw, 34px);
+  --glass-sat: 148%;
+  --glass-pane-bg: color-mix(in srgb, var(--color-cardBackground) 50%, transparent);
+  --glass-pane-bg-solid: color-mix(in srgb, var(--color-cardBackground) 68%, transparent);
+  --glass-stroke: color-mix(in srgb, var(--color-border) 58%, transparent);
+  --glass-inset-highlight: color-mix(in srgb, var(--color-white) 9%, transparent);
+  --glass-ambient: rgba(0, 0, 0, 0.38);
+  --glass-header-bg: color-mix(in srgb, var(--color-background) 34%, transparent);
+  --glass-modal-scrim-dark: color-mix(in srgb, #000000 55%, transparent);
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -52,13 +80,30 @@ html body[data-sveltekit-preload-data="hover"] .popup-root {
   min-height: 100%;
   height: 100%;
   flex: 1;
-  background: var(--color-background);
+  isolation: isolate;
   overflow: hidden;
+  background-color: var(--color-background);
+  background-image:
+    radial-gradient(
+      ellipse 125% 100% at 12% -12%,
+      color-mix(in srgb, var(--color-secondary) 16%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 90% 82% at 96% 4%,
+      color-mix(in srgb, var(--color-accent) 10%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 72% 55% at 48% 108%,
+      color-mix(in srgb, var(--color-primary) 7%, transparent) 0%,
+      transparent 58%
+    );
 }
 /* Global toast – fixed at top center; compact width (not full tab); glassy + readable */
 html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global {
   position: fixed;
-  top: 56px;
+  top: 52px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;
@@ -104,6 +149,11 @@ html body[data-sveltekit-preload-data="hover"] .app-content {
   padding: var(--space-small);
   min-height: 0;
   box-sizing: border-box;
+}
+/* Popup main: wider side gutters than generic .app-content */
+html body[data-sveltekit-preload-data="hover"] .popup-root .app-content {
+  padding-left: var(--space-large);
+  padding-right: var(--space-large);
 }
 html
   body[data-sveltekit-preload-data="hover"]
@@ -187,10 +237,14 @@ html body[data-sveltekit-preload-data="hover"] .camera-permission-card {
   text-align: center;
   max-width: 320px;
   padding: var(--space-extraLarge) var(--space-large);
-  background: var(--color-cardBackground);
-  border: 1px solid var(--color-border);
+  background: var(--glass-pane-bg-solid);
+  border: 1px solid var(--glass-stroke);
   border-radius: var(--radius-large);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-inset-highlight),
+    0 14px 48px var(--glass-ambient);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   box-sizing: border-box;
 }
 html body[data-sveltekit-preload-data="hover"] .camera-permission-logo {
@@ -244,8 +298,13 @@ html body[data-sveltekit-preload-data="hover"] .app-header {
   z-index: 20;
   min-height: 48px;
   height: 48px;
-  background: var(--color-background);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--glass-header-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border-bottom: 1px solid var(--glass-stroke);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-inset-highlight),
+    0 4px 24px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
   box-sizing: border-box;
   padding: 0 var(--space-medium);
 }
@@ -298,18 +357,21 @@ html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn 
   padding: 0;
   border: none;
   border-radius: var(--radius-small);
-  background: var(--color-cardBackground);
+  background: var(--glass-pane-bg);
   color: var(--color-text);
   cursor: pointer;
   transition:
     background 0.2s,
-    transform 0.2s;
+    transform 0.2s,
+    box-shadow 0.2s;
   font-size: var(--font-size-lg);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 50%, transparent),
+    0 1px 6px color-mix(in srgb, var(--color-shadowColor) 4%, transparent);
+  backdrop-filter: blur(12px) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat));
 }
-html
-  body[data-sveltekit-preload-data="hover"]
-  .app-header
-  .theme-toggle:hover:not(:disabled),
+html body[data-sveltekit-preload-data="hover"] .app-header .theme-toggle:hover:not(:disabled),
 html
   body[data-sveltekit-preload-data="hover"]
   .app-header
@@ -319,7 +381,7 @@ html
   .app-header
   .balance-visibility-btn:hover,
 html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn:hover {
-  background: var(--color-border);
+  background: var(--glass-pane-bg-solid);
   transform: scale(1.05);
 }
 html body[data-sveltekit-preload-data="hover"] .app-header .theme-toggle:active,
@@ -396,9 +458,16 @@ html body[data-sveltekit-preload-data="hover"] .stepper-top {
   z-index: 5;
   margin: 0 0 var(--space-large) 0;
   flex-shrink: 0;
-  background: var(--color-background);
+  background: var(--glass-pane-bg);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-medium);
   padding: var(--space-small) 0;
   width: 100%;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 40%, transparent),
+    0 6px 24px color-mix(in srgb, var(--color-shadowColor) 4%, transparent);
 }
 /* Pairing body: centered on launch, start-aligned when steps active */
 html body[data-sveltekit-preload-data="hover"] .pairing-body {
@@ -820,7 +889,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .wallet {
   min-height: 0;
   flex: 1;
   color: var(--color-text);
-  background: var(--color-background);
+  background: transparent;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -833,21 +902,25 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .wallet-content {
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0;
-  margin-top: var(--space-medium);
+  margin-top: var(--space-small);
   box-sizing: border-box;
 }
 
 /* ----- Balance card (compact) ----- */
 html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card {
-  margin-top: var(--space-small);
+  margin-top: 0;
   margin-bottom: 0;
   padding: var(--space-medium);
-  background: var(--color-cardBackground);
-  border: 1px solid var(--color-border);
+  background: var(--glass-pane-bg);
+  border: 1px solid var(--glass-stroke);
   border-radius: var(--radius-medium);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
   min-width: 0;
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-inset-highlight),
+    0 10px 40px var(--glass-ambient);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card-inner {
   display: flex;
@@ -959,12 +1032,17 @@ html
   body[data-sveltekit-preload-data="hover"]
   .popup-root
   .address-selector-inner {
-  background: var(--color-cardBackground);
-  border: 1px solid var(--color-border);
+  background: var(--glass-pane-bg);
+  border: 1px solid var(--glass-stroke);
   border-radius: var(--radius-medium);
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 45%, transparent),
+    0 8px 28px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-toggle {
   background: transparent;
@@ -997,11 +1075,15 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .sync-addresses {
   border-radius: var(--radius-small);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .address-dropdown {
-  background: var(--color-cardBackground);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  background: var(--glass-pane-bg-solid);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 35%, transparent),
+    0 12px 40px color-mix(in srgb, var(--color-shadowColor) 10%, transparent);
   border: 1px solid var(--color-secondary);
   border-radius: 0 0 var(--radius-medium) var(--radius-medium);
   border-color: var(--color-secondary);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-header {
   background: var(--color-background);
@@ -1026,16 +1108,18 @@ html
 }
 /* Dark mode: address selector, dropdown, list items */
 [data-theme="darkPolished"] .popup-root .address-selector-inner {
-  background: var(--color-cardBackground);
-  border-color: var(--color-border);
+  background: var(--glass-pane-bg);
+  border-color: var(--glass-stroke);
 }
 [data-theme="darkPolished"] .popup-root .address-selector .address-type-icon {
   filter: brightness(0) invert(1);
   opacity: 0.95;
 }
 [data-theme="darkPolished"] .popup-root .address-dropdown {
-  background: var(--color-cardBackground);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  background: var(--glass-pane-bg-solid);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 35%, transparent),
+    0 12px 40px rgba(0, 0, 0, 0.45);
   border: 1px solid var(--color-secondary);
   border-radius: 0 0 var(--radius-medium) var(--radius-medium);
   border-color: var(--color-secondary);
@@ -1096,12 +1180,17 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-empty {
   color: var(--color-textSecondary);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .tx-item-btn {
-  background: var(--color-cardBackground);
-  border-color: var(--color-border);
+  border: 1px solid var(--glass-stroke);
+  background: var(--glass-pane-bg);
   color: var(--color-text);
+  backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 38%, transparent),
+    0 2px 12px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .tx-item-btn:hover {
-  background: var(--color-background);
+  background: var(--glass-pane-bg-solid);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .tx-status-text {
   color: var(--color-text);
@@ -1152,21 +1241,25 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer-end {
 html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-load-more {
   padding: var(--space-small) var(--space-medium);
   border-radius: var(--radius-small);
-  border: 1px solid var(--color-border);
-  background: var(--color-cardBackground);
+  border: 1px solid var(--glass-stroke);
+  background: var(--glass-pane-bg);
   color: var(--color-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
     background 0.2s,
-    border-color 0.2s;
+    border-color 0.2s,
+    box-shadow 0.2s;
+  backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 40%, transparent);
 }
 html
   body[data-sveltekit-preload-data="hover"]
   .popup-root
   .tx-list-load-more:hover {
-  background: var(--color-background);
+  background: var(--glass-pane-bg-solid);
   border-color: var(--color-primary);
 }
 /* ----- PIN lock / Set PIN screens ----- */
@@ -1180,6 +1273,31 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen {
   width: 100%;
   box-sizing: border-box;
   flex: 1;
+}
+/* Lock screen: keep unlock card vertically centered in free space; version at bottom */
+html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen.lock-screen {
+  justify-content: space-between;
+  align-items: center;
+  min-height: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .lock-screen-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+}
+html body[data-sveltekit-preload-data="hover"] .popup-root .lock-screen-version {
+  margin: 0;
+  padding-top: var(--space-medium);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-textSecondary);
+  text-align: center;
+  line-height: 1.35;
+  flex-shrink: 0;
 }
 html
   body[data-sveltekit-preload-data="hover"]
@@ -1200,12 +1318,16 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-card {
   max-width: 300px;
   padding: var(--space-extraLarge) var(--space-large);
   gap: 0;
-  background: var(--color-cardBackground);
-  border: 1px solid var(--color-border);
+  background: var(--glass-pane-bg-solid);
+  border: 1px solid var(--glass-stroke);
   border-radius: var(--radius-large);
   color: var(--color-text);
   box-sizing: border-box;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-inset-highlight),
+    0 14px 48px var(--glass-ambient);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-logo {
   display: block;
@@ -1446,8 +1568,13 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer {
   padding-top: var(--space-medium);
   min-height: 40px;
   color: var(--color-textSecondary);
-  background: var(--color-background);
-  border-top: 1px solid var(--color-border);
+  background: var(--glass-pane-bg);
+  border-top: 1px solid var(--glass-stroke);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-inset-highlight),
+    0 -12px 32px color-mix(in srgb, var(--color-shadowColor) 4%, transparent);
   font-size: var(--font-size-xs);
   box-sizing: border-box;
 }
@@ -1487,16 +1614,20 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-small);
-  border: 1px solid var(--color-border);
-  background: var(--color-cardBackground);
+  border: 1px solid var(--glass-stroke);
+  background: var(--glass-pane-bg);
   color: var(--color-text);
   cursor: pointer;
   transition:
     background 0.2s,
-    border-color 0.2s;
+    border-color 0.2s,
+    box-shadow 0.2s;
+  backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 35%, transparent);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn:hover {
-  background: var(--color-border);
+  background: var(--glass-pane-bg-solid);
   border-color: var(--color-primary);
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root .footer-link {
@@ -1513,12 +1644,33 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer-link:hover {
 
 /* ----- Modals (backdrop + card base) ----- */
 html body[data-sveltekit-preload-data="hover"] .popup-root .modal {
-  background: var(--color-modalBackdrop);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
 }
+
+html[data-theme='lightPolished']
+  body[data-sveltekit-preload-data='hover']
+  .popup-root
+  .modal {
+  background: var(--glass-modal-scrim-light);
+}
+
+html[data-theme='darkPolished']
+  body[data-sveltekit-preload-data='hover']
+  .popup-root
+  .modal {
+  background: var(--glass-modal-scrim-dark);
+}
+
 html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card {
-  background: var(--color-cardBackground);
-  border: 1px solid var(--color-border);
+  background: var(--glass-pane-bg-solid);
+  border: 1px solid var(--glass-stroke);
   border-radius: var(--radius-large);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-inset-highlight),
+    0 18px 55px var(--glass-ambient);
 }
 /* Shared modal header (send + receive) */
 html
