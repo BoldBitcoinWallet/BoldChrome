@@ -183,23 +183,47 @@ class BlockchainService {
     }
   }
 
+  /** One bounded HTTP GET + optional JSON parse; must run inside serialization. On non-OK, consumes body before returning meta. */
+  private async fetchJsonSingleAttemptEsplora<T>(
+    url: string,
+  ): Promise<
+    | { ok: true; data: T }
+    | {
+        ok: false;
+        status: number;
+        retryAfter: string | null;
+      }
+  > {
+    const response = await fetchWithTimeout(url);
+    if (response.ok) {
+      return { ok: true, data: (await response.json()) as T };
+    }
+    await consumeBodyQuietly(response);
+    return {
+      ok: false,
+      status: response.status,
+      retryAfter: response.headers.get('Retry-After'),
+    };
+  }
+
   private async fetchJsonWith429Retries<T>(
     url: string,
     apiKind: string,
   ): Promise<T> {
     let lastStatus = 0;
     for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
-      const response = await fetchWithTimeout(url);
-      if (response.ok) {
-        return (await response.json()) as T;
-      }
-      lastStatus = response.status;
-      await consumeBodyQuietly(response);
+      const result = await this.withExploraAddressSerialized(() =>
+        this.fetchJsonSingleAttemptEsplora<T>(url),
+      );
 
-      if (response.status === 429 && attempt < MAX_429_RETRIES) {
-        const ra = parseRetryAfterSeconds(
-          response.headers.get('Retry-After'),
-        );
+      if (result.ok) {
+        return result.data;
+      }
+
+      lastStatus = result.status;
+
+      if (result.status === 429 && attempt < MAX_429_RETRIES) {
+        const ra = parseRetryAfterSeconds(result.retryAfter);
         const waitMs =
           ra != null
             ? Math.min(120_000, Math.max(500, ra * 1000))
@@ -207,11 +231,12 @@ class BlockchainService {
         console.warn(
           `[Blockchain] ${apiKind} rate limited (429), waiting ${waitMs}ms (attempt ${attempt + 1}/${MAX_429_RETRIES})`,
         );
+        // Backoff outside serialization so other explorers (refresh + discovery) keep making progress.
         await sleep(waitMs);
         continue;
       }
 
-      throw new Error(userFacingHttpError(response.status, apiKind));
+      throw new Error(userFacingHttpError(result.status, apiKind));
     }
     throw new Error(userFacingHttpError(lastStatus, apiKind));
   }
