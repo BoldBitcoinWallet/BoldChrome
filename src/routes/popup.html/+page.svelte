@@ -29,6 +29,7 @@
     getCurrentReceiveAddress,
     runHdDiscovery,
     switchAddressType,
+    addressTypeUISelection,
   } from "$lib/stores/wallet";
   import { qr } from "$lib/services/qr";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
@@ -49,6 +50,31 @@
     PIN_MAX_LENGTH,
   } from "$lib/services/pin";
   import lockerIcon from "$lib/assets/locker-icon.png";
+  import { keyshareFingerprint as computeKeyshareFingerprint } from "$lib/services/keyshareFingerprint";
+
+  function getExtensionVersionLabel(): string {
+    try {
+      const cr = (
+        globalThis as {
+          chrome?: {
+            runtime?: {
+              getManifest?: () => { version?: string; version_name?: string };
+            };
+          };
+        }
+      ).chrome;
+      if (!cr?.runtime?.getManifest) return "";
+      const m = cr.runtime.getManifest();
+      const named =
+        typeof m.version_name === "string" ? m.version_name.trim() : "";
+      if (named) return named;
+      const v = typeof m.version === "string" ? m.version.trim() : "";
+      return v ? `v${v}` : "";
+    } catch {
+      return "";
+    }
+  }
+  const extensionVersionLabel = getExtensionVersionLabel();
 
   // PIN lock state
   let pinHash: string | null = null;
@@ -160,6 +186,10 @@
   $: isPaired =
     !!$walletStore.publicKey && $walletStore.publicKey.trim() !== "";
 
+  $: keyshareFingerprintDisplay = computeKeyshareFingerprint(
+    $walletStore.publicKey,
+  );
+
   // Debug logging
   $: console.log("[popup.html] Wallet state:", {
     publicKey: $walletStore.publicKey?.substring(0, 20) + "...",
@@ -180,8 +210,8 @@
   let balance = 0; // Will be populated from store
   let fiat = 0; // Will be populated from store
   let showBalance = true; // toggle to hide/show balance
+  let showWalletSettingsMenu = false;
   let isRefreshing = false;
-  let showAddressDropdown = false;
   let requestingAddresses = false;
 
   // Mempool provider: null = not chosen (show preference after pairing), '' = default, string = custom URL. 'loading' = init.
@@ -360,6 +390,26 @@
     applyTheme(next);
   }
 
+  function toggleWalletSettingsMenu() {
+    showWalletSettingsMenu = !showWalletSettingsMenu;
+  }
+
+  function closeWalletSettingsMenu() {
+    showWalletSettingsMenu = false;
+  }
+
+  function handleWalletSettingsEscape(e: KeyboardEvent) {
+    if (showWalletSettingsMenu && e.key === "Escape") {
+      e.preventDefault();
+      closeWalletSettingsMenu();
+    }
+  }
+
+  async function onSettingsSyncAddresses() {
+    closeWalletSettingsMenu();
+    await handleRequestAddresses();
+  }
+
   async function handleUnpair() {
     if (
       !confirm(
@@ -367,6 +417,7 @@
       )
     )
       return;
+    showWalletSettingsMenu = false;
     await resetWallet();
     pairingStep = 0;
     pairingStatus = "Click logo to start pairing";
@@ -432,11 +483,10 @@
 
   // Convert wallet transactions to UI format (app-aligned: status, amount, address, txid, time)
   $: btcRate = btcRateForFiat;
-  $: activeAddressTypeId = $walletStore.hdState?.addressType || "segwit-native";
-  $: selectedAddressType = (() => {
-    const t = ADDRESS_TYPES.find((a) => a.id === activeAddressTypeId);
-    return t?.label || "Native SegWit";
-  })();
+  $: activeAddressTypeId =
+    $walletStore.hdState?.addressType || "segwit-native";
+  $: settingsHighlightedAddressType =
+    $addressTypeUISelection ?? activeAddressTypeId;
   $: selectedAddressShort = (() => {
     if (!$walletStore.address) return "";
     const raw = $walletStore.address;
@@ -677,6 +727,20 @@
       toastType = "";
       toastTimer = null;
     }, 3200);
+  }
+
+  async function copyWalletFingerprint() {
+    const id = keyshareFingerprintDisplay;
+    if (!id || id === "N/A") {
+      triggerToast("No Fingerprint to copy", "error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(id);
+      triggerToast("Fingerprint copied", "success");
+    } catch {
+      triggerToast("Could not copy", "error");
+    }
   }
   let showQRModal = false;
   let qrCodeDataUrl = "";
@@ -950,23 +1014,26 @@
     { id: "legacy" as const, label: "Legacy", prefix: "1..." },
   ];
 
-  let switchingAddressType = false;
-
-  function toggleAddressDropdown() {
-    showAddressDropdown = !showAddressDropdown;
-  }
-
   async function handleSelectAddressType(
     typeId: "segwit-native" | "segwit-nested" | "legacy",
   ) {
-    showAddressDropdown = false;
-    const current = $walletStore.hdState?.addressType;
-    if (current === typeId) return;
-    switchingAddressType = true;
+    const current = get(walletStore).hdState?.addressType;
+    if (current === typeId) {
+      closeWalletSettingsMenu();
+      return;
+    }
+
     try {
       await switchAddressType(typeId);
-    } finally {
-      switchingAddressType = false;
+      closeWalletSettingsMenu();
+    } catch (e) {
+      console.error("Address type switch failed:", e);
+      triggerToast(
+        e instanceof Error
+          ? e.message
+          : "Could not switch address format. Try again.",
+        "error",
+      );
     }
   }
 
@@ -1373,6 +1440,7 @@
   });
 </script>
 
+<svelte:window on:keydown={handleWalletSettingsEscape} />
 <div
   class="popup-root"
   class:unpaired={!isPaired && !showCameraPermissionScreen}
@@ -1529,22 +1597,6 @@
             </svg>
           </button>
         {/if}
-        <button
-          class="theme-toggle"
-          on:click={toggleTheme}
-          title={$themeName === "darkPolished"
-            ? "Switch to light"
-            : "Switch to dark"}
-          aria-label="Toggle theme"
-        >
-          <img
-            src={$themeName === "darkPolished" ? lightIcon : darkIcon}
-            alt=""
-            class="header-icon theme-toggle-icon"
-            width="20"
-            height="20"
-          />
-        </button>
         {#if showMainApp}
           <button
             type="button"
@@ -1591,15 +1643,40 @@
             />
           </button>
           <button
-            class="unpair-btn"
-            on:click={handleUnpair}
-            title="Unpair wallet"
-            aria-label="Unpair wallet and return to setup"
+            type="button"
+            class="wallet-settings-btn"
+            on:click={toggleWalletSettingsMenu}
+            title="Wallet details and settings"
+            aria-label="Wallet details and settings"
+            aria-expanded={showWalletSettingsMenu}
+            aria-haspopup="dialog"
+          >
+            <svg
+              class="header-icon wallet-settings-icon"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+        {:else if isPaired || pairingStep > 0}
+          <button
+            class="theme-toggle"
+            on:click={toggleTheme}
+            title={$themeName === "darkPolished"
+              ? "Switch to light"
+              : "Switch to dark"}
+            aria-label="Toggle theme"
           >
             <img
-              src={deleteIcon}
+              src={$themeName === "darkPolished" ? lightIcon : darkIcon}
               alt=""
-              class="header-icon unpair-icon"
+              class="header-icon theme-toggle-icon"
               width="20"
               height="20"
             />
@@ -1607,6 +1684,159 @@
         {/if}
       </span>
     </header>
+  {/if}
+
+  {#if showWalletSettingsMenu && showMainApp}
+    <div
+      class="modal mempool-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wallet-settings-title"
+      tabindex="-1"
+      on:click={closeWalletSettingsMenu}
+      on:keydown={(e) => e.key === "Escape" && closeWalletSettingsMenu()}
+    >
+      <!-- svelte-ignore a11y_click_events_have_key_events: stop modal backdrop from receiving bubbled clicks from the panel -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <div
+        id="wallet-settings-panel"
+        class="modal-card wallet-settings-sheet"
+        role="document"
+        tabindex="-1"
+        on:click|stopPropagation
+      >
+      <div class="wallet-settings-head">
+        <h2 id="wallet-settings-title" class="wallet-settings-title">
+          Wallet details
+        </h2>
+        <button
+          type="button"
+          class="wallet-settings-close"
+          on:click={closeWalletSettingsMenu}
+          aria-label="Close wallet settings"
+        >✕</button>
+      </div>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Fingerprint</h3>
+        <p class="wallet-settings-hint">
+          Short fingerprint for this wallet
+        </p>
+        <div class="wallet-settings-fingerprint-row">
+          <span class="wallet-settings-fingerprint-value">
+            {keyshareFingerprintDisplay}
+          </span>
+          <button
+            type="button"
+            class="wallet-id-copy"
+            on:click={copyWalletFingerprint}
+            disabled={keyshareFingerprintDisplay === "N/A"}
+            title="Copy fingerprint"
+            aria-label="Copy fingerprint"
+          >
+            Copy
+          </button>
+        </div>
+      </section>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Appearance</h3>
+        <div class="wallet-settings-row">
+          <span class="wallet-settings-row-text">
+            {$themeName === "darkPolished" ? "Dark theme" : "Light theme"}
+          </span>
+          <button
+            type="button"
+            class="wallet-settings-theme-btn"
+            on:click={toggleTheme}
+            title={$themeName === "darkPolished"
+              ? "Switch to light mode"
+              : "Switch to dark mode"}
+          >
+            <img
+              src={$themeName === "darkPolished" ? lightIcon : darkIcon}
+              alt=""
+              class="header-icon"
+              width="20"
+              height="20"
+            />
+          </button>
+        </div>
+      </section>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Receiving address format</h3>
+        {#if selectedAddressShort}
+          <p class="wallet-settings-address-preview">{selectedAddressShort}</p>
+        {/if}
+        {#if $walletStore.publicKey}
+          {#if $addressTypeUISelection}
+            <p class="wallet-settings-switching" aria-live="polite">
+              Switching to {$addressTypeUISelection === "segwit-native"
+                ? "Native SegWit"
+                : $addressTypeUISelection === "segwit-nested"
+                  ? "SegWit compatible"
+                  : "Legacy"}… fetching addresses
+            </p>
+          {/if}
+          <ul class="wallet-settings-address-list">
+            {#each ADDRESS_TYPES as atype}
+              <li>
+                <button
+                  type="button"
+                  class="address-item wallet-settings-address-item"
+                  class:active={settingsHighlightedAddressType === atype.id}
+                  disabled={!!$addressTypeUISelection}
+                  on:click={() => handleSelectAddressType(atype.id)}
+                >
+                  <img
+                    src={addressTypeIcon}
+                    alt=""
+                    class="address-type-icon"
+                    width="18"
+                    height="18"
+                  />
+                  <div class="address-info">
+                    <div class="address-text">{atype.label}</div>
+                    <div class="address-prefix">{atype.prefix}</div>
+                  </div>
+                  {#if settingsHighlightedAddressType === atype.id}
+                    <span class="address-check">✓</span>
+                  {/if}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <button
+            type="button"
+            class="wallet-settings-sync-btn"
+            disabled={requestingAddresses}
+            on:click={onSettingsSyncAddresses}
+          >
+            {requestingAddresses ? "Opening…" : "Sync addresses from mobile"}
+          </button>
+        {/if}
+      </section>
+
+      <section class="wallet-settings-block wallet-settings-danger">
+        <button
+          type="button"
+          class="wallet-settings-unpair-btn"
+          on:click={handleUnpair}
+        >
+          <img
+            src={deleteIcon}
+            alt=""
+            class="wallet-settings-unpair-icon"
+            width="18"
+            height="18"
+          />
+          Unpair wallet
+        </button>
+      </section>
+    </div>
+    </div>
   {/if}
 
   <!-- Global toast (always visible when message set, regardless of paired/unpaired) -->
@@ -1632,38 +1862,45 @@
     {:else if showLockScreen}
       <!-- Lock screen: require PIN to unlock -->
       <div class="pin-screen lock-screen">
-        <div class="pin-screen-card">
-          <img
-            src={$themeName === "darkPolished" ? logoSmallDark : logo}
-            alt=""
-            class="pin-screen-logo"
-            width="56"
-            height="56"
-          />
-          <h2 class="pin-screen-title">Unlock extension</h2>
-          <p class="pin-screen-hint">Enter your PIN to continue</p>
-          <form on:submit|preventDefault={handleUnlock} class="pin-form">
-            <input
-              type="password"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              autocomplete="off"
-              placeholder="PIN"
-              bind:value={unlockPinValue}
-              class="pin-input"
-              maxlength={PIN_MAX_LENGTH}
-              aria-label="PIN"
-              aria-invalid={!!unlockError}
-              aria-describedby={unlockError ? "unlock-pin-error" : undefined}
+        <div class="lock-screen-main">
+          <div class="pin-screen-card">
+            <img
+              src={$themeName === "darkPolished" ? logoSmallDark : logo}
+              alt=""
+              class="pin-screen-logo"
+              width="56"
+              height="56"
             />
-            {#if unlockError}
-              <p id="unlock-pin-error" class="pin-error" role="alert">
-                {unlockError}
-              </p>
-            {/if}
-            <button type="submit" class="btn-primary pin-submit">Unlock</button>
-          </form>
+            <h2 class="pin-screen-title">Unlock extension</h2>
+            <p class="pin-screen-hint">Enter your PIN to continue</p>
+            <form on:submit|preventDefault={handleUnlock} class="pin-form">
+              <input
+                type="password"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                autocomplete="off"
+                placeholder="PIN"
+                bind:value={unlockPinValue}
+                class="pin-input"
+                maxlength={PIN_MAX_LENGTH}
+                aria-label="PIN"
+                aria-invalid={!!unlockError}
+                aria-describedby={unlockError ? "unlock-pin-error" : undefined}
+              />
+              {#if unlockError}
+                <p id="unlock-pin-error" class="pin-error" role="alert">
+                  {unlockError}
+                </p>
+              {/if}
+              <button type="submit" class="btn-primary pin-submit">Unlock</button>
+            </form>
+          </div>
         </div>
+        {#if extensionVersionLabel}
+          <p class="lock-screen-version" aria-label="Extension version">
+            {extensionVersionLabel}
+          </p>
+        {/if}
       </div>
     {:else if showMempoolPreferenceScreen}
       <!-- Mempool provider: choose custom or skip for default (after pairing, once) -->
@@ -1997,82 +2234,6 @@
                 <div class="fiat placeholder fade-in">●●●●●●●</div>
               {/if}
             </div>
-          </section>
-
-          <section class="address-selector">
-            {#if $walletStore.publicKey}
-              <div class="address-selector-inner">
-                <button
-                  class="dropdown-toggle"
-                  on:click={toggleAddressDropdown}
-                  disabled={switchingAddressType}
-                >
-                  <span class="address-toggle-left">
-                    <img
-                      src={addressTypeIcon}
-                      alt=""
-                      class="address-type-icon"
-                      width="18"
-                      height="18"
-                    />
-                    <span class="address-type-label">
-                      {#if switchingAddressType}
-                        Switching...
-                      {:else}
-                        {selectedAddressType}
-                      {/if}
-                    </span>
-                  </span>
-                  <span class="address-toggle-right">
-                    <span class="address-display">{selectedAddressShort}</span>
-                    <span
-                      class="dropdown-arrow"
-                      class:open={showAddressDropdown}>▼</span
-                    >
-                  </span>
-                </button>
-              </div>
-            {:else}
-              <button
-                class="sync-addresses"
-                on:click={handleRequestAddresses}
-                disabled={requestingAddresses}
-              >
-                {requestingAddresses ? "Requesting..." : "Sync from Mobile"}
-              </button>
-            {/if}
-
-            {#if showAddressDropdown}
-              <div class="address-dropdown">
-                <div class="dropdown-header">
-                  <span>Address Type</span>
-                </div>
-                <ul class="address-list">
-                  {#each ADDRESS_TYPES as atype}
-                    <button
-                      class="address-item"
-                      class:active={activeAddressTypeId === atype.id}
-                      on:click={() => handleSelectAddressType(atype.id)}
-                    >
-                      <img
-                        src={addressTypeIcon}
-                        alt=""
-                        class="address-type-icon"
-                        width="18"
-                        height="18"
-                      />
-                      <div class="address-info">
-                        <div class="address-text">{atype.label}</div>
-                        <div class="address-prefix">{atype.prefix}</div>
-                      </div>
-                      {#if activeAddressTypeId === atype.id}
-                        <span class="address-check">✓</span>
-                      {/if}
-                    </button>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
           </section>
 
           <section class="actions-row">
@@ -2728,7 +2889,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    background: var(--color-background);
+    background: transparent;
     overflow: hidden;
     position: relative;
     box-sizing: border-box;
@@ -2754,15 +2915,21 @@
     padding: 0;
     border: none;
     border-radius: var(--radius-small);
-    background: var(--color-cardBackground);
+    background: var(--glass-pane-bg, var(--color-cardBackground));
     color: var(--color-text);
     cursor: pointer;
     transition:
       background 0.2s,
-      transform 0.2s;
+      transform 0.2s,
+      box-shadow 0.2s;
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
   }
   .lock-btn:hover {
-    background: var(--color-border);
+    background: var(--glass-pane-bg-solid, var(--color-border));
     transform: scale(1.05);
   }
   .lock-icon {
@@ -2782,7 +2949,7 @@
     min-height: 0;
     flex: 1;
     color: var(--color-text);
-    background: var(--color-background);
+    background: transparent;
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -2795,19 +2962,15 @@
     flex: 1;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 0 12px 12px;
+    padding: 0 var(--space-small) var(--space-medium);
     box-sizing: border-box;
   }
 
-  /* Balance card (app-style rounded card) */
+  /* Structural only — glass surface from app.css (.popup-root .balance-card) */
   .balance-card {
-    margin-top: 8px;
+    margin-top: 0;
     margin-bottom: 0;
     padding: 12px;
-    background: var(--color-cardBackground);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     box-sizing: border-box;
     min-width: 0;
   }
@@ -2820,6 +2983,307 @@
     min-height: 44px;
     min-width: 0;
   }
+
+  /* Wallet details: full-viewport backdrop + centered card (same pattern as mempool provider modal via .modal + .mempool-modal) */
+
+  .wallet-settings-sheet.modal-card {
+    width: min(356px, 92vw);
+    max-width: 356px;
+    max-height: min(560px, 85dvh);
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 0 12px;
+    box-sizing: border-box;
+  }
+
+
+
+  .wallet-settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 12px 8px;
+    border-bottom: 1px solid var(--glass-stroke, var(--color-border));
+    position: sticky;
+    top: 0;
+    background: var(--glass-pane-bg, var(--color-cardBackground));
+    backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-sat, 160%));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 20px))
+      saturate(var(--glass-sat, 160%));
+    z-index: 1;
+  }
+
+  .wallet-settings-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .wallet-settings-close {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-textSecondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+
+  .wallet-settings-close:hover {
+    background: var(--color-background);
+    color: var(--color-text);
+  }
+
+  .wallet-settings-block {
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-block:last-child {
+    border-bottom: none;
+  }
+
+  .wallet-settings-label {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-textSecondary);
+  }
+
+  .wallet-settings-hint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--color-textSecondary);
+  }
+
+  .wallet-settings-fingerprint-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: color-mix(
+      in srgb,
+      var(--color-background) 70%,
+      var(--color-cardBackground)
+    );
+    min-width: 0;
+  }
+
+  .wallet-settings-fingerprint-value {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .wallet-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .wallet-settings-row-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .wallet-settings-theme-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-background);
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      transform 0.15s;
+  }
+
+  .wallet-settings-theme-btn:hover {
+    border-color: var(--color-primary);
+    transform: scale(1.04);
+  }
+
+  .wallet-settings-theme-btn img {
+    display: block;
+    opacity: 0.95;
+  }
+
+  .wallet-settings-address-preview {
+    margin: 0 0 8px;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--color-textSecondary);
+    word-break: break-all;
+    text-align: center;
+    padding: 6px 8px;
+    background: var(--color-background);
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-switching {
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-textSecondary);
+    text-align: center;
+    padding: 8px;
+  }
+
+  .wallet-settings-address-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .wallet-settings-address-list li {
+    margin: 0;
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item {
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item:disabled {
+    opacity: 0.58;
+    cursor: wait;
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item:last-child {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-sync-btn {
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--color-primary);
+    color: var(--color-textOnPrimary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }
+
+  .wallet-settings-sync-btn:hover:not(:disabled) {
+    filter: brightness(0.95);
+  }
+
+  .wallet-settings-sync-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .wallet-settings-danger {
+    padding-top: 8px;
+  }
+
+  .wallet-settings-unpair-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--color-error) 10%,
+      var(--color-cardBackground)
+    );
+    color: var(--color-error);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
+  }
+
+  .wallet-settings-unpair-btn:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-error) 16%,
+      var(--color-cardBackground)
+    );
+    border-color: var(--color-error);
+  }
+
+  .wallet-settings-unpair-icon {
+    display: block;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  :global([data-theme="darkPolished"]) .wallet-settings-unpair-icon {
+    filter: brightness(0) invert(1);
+    opacity: 0.9;
+  }
+
+  .wallet-id-copy {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: var(--color-cardBackground);
+    color: var(--color-textSecondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .wallet-id-copy:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+    background: var(--color-background);
+  }
+
+  .wallet-id-copy:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
   .balance-loading {
     display: flex;
     align-items: center;
@@ -2905,7 +3369,7 @@
   .app-header .refresh-btn,
   .app-header .balance-visibility-btn,
   .app-header .expand-btn,
-  .app-header .unpair-btn {
+  .app-header .wallet-settings-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2914,27 +3378,33 @@
     padding: 0;
     border: none;
     border-radius: 8px;
-    background: var(--color-cardBackground);
+    background: var(--glass-pane-bg, var(--color-cardBackground));
     color: var(--color-text);
     cursor: pointer;
     transition:
       background 0.2s,
-      transform 0.2s;
+      transform 0.2s,
+      box-shadow 0.2s;
     font-size: 16px;
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
   }
   .app-header .theme-toggle:hover:not(:disabled),
   .app-header .refresh-btn:hover:not(:disabled),
   .app-header .balance-visibility-btn:hover,
   .app-header .expand-btn:hover,
-  .app-header .unpair-btn:hover {
-    background: var(--color-border);
+  .app-header .wallet-settings-btn:hover {
+    background: var(--glass-pane-bg-solid, var(--color-border));
     transform: scale(1.05);
   }
   .app-header .theme-toggle:active,
   .app-header .refresh-btn:active,
   .app-header .balance-visibility-btn:active,
   .app-header .expand-btn:active,
-  .app-header .unpair-btn:active {
+  .app-header .wallet-settings-btn:active {
     transform: scale(0.98);
   }
   .app-header .refresh-btn:disabled {
@@ -2988,9 +3458,10 @@
   }
 
   .amount {
+    font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 22px;
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: 0.02em;
     color: var(--color-text);
     word-break: break-all;
     text-align: center;
@@ -3015,8 +3486,10 @@
   }
 
   .fiat {
+    font-family: var(--font-mono), ui-monospace, monospace;
     color: var(--color-textSecondary);
     font-size: 12px;
+    letter-spacing: 0.02em;
   }
 
   .fiat.placeholder {
@@ -3039,13 +3512,10 @@
     min-width: 0;
     width: 100%;
   }
-  /* Same width and style as balance-card so dropdown aligns */
+  /* Glass surface + chrome from app.css (.popup-root .address-selector-inner) */
   .address-selector-inner {
     padding: 12px;
-    background: var(--color-cardBackground);
-    border: 1px solid var(--color-border);
     border-radius: 10px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     box-sizing: border-box;
     min-width: 0;
     width: 100%;
@@ -3102,7 +3572,6 @@
     flex-shrink: 0;
     opacity: 0.9;
   }
-  :global([data-theme="darkPolished"]) .address-selector .address-type-icon,
   :global([data-theme="darkPolished"]) .address-item .address-type-icon {
     filter: brightness(0) invert(1);
     opacity: 0.95;
@@ -3155,8 +3624,6 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--color-cardBackground);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
     z-index: 1000;
     margin-top: 4px;
     max-height: 220px;
@@ -3167,15 +3634,16 @@
     border-color: var(--color-border);
   }
   :global([data-theme="darkPolished"]) .address-dropdown {
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 30%, transparent),
+      0 12px 40px rgba(0, 0, 0, 0.45);
     border-top: 1px solid var(--color-border);
     border-radius: 0 0 10px 10px;
     border-color: var(--color-secondary);
     padding: 4px;
   }
   :global([data-theme="darkPolished"]) .address-selector-inner {
-    background: var(--color-cardBackground);
-    border-color: var(--color-border);
+    border-color: var(--glass-stroke, var(--color-border));
   }
 
   .dropdown-header {
@@ -3443,11 +3911,11 @@
     display: block;
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid var(--color-border);
     border-radius: 10px;
-    background: var(--color-cardBackground);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-    transition: background 0.2s;
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
     animation: slideInUp 0.3s ease-out;
     min-width: 0;
     box-sizing: border-box;
@@ -3455,9 +3923,6 @@
     text-align: left;
     font: inherit;
     color: inherit;
-  }
-  .tx-item-btn:hover {
-    background: var(--color-background);
   }
 
   .tx-row {
@@ -3577,18 +4042,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-modalBackdrop);
     animation: fadeIn 0.3s ease-out;
     z-index: 1000;
   }
 
   .modal-card {
-    background: var(--color-cardBackground);
     padding: 20px;
     border-radius: var(--radius-large, 14px);
     width: 320px;
-    border: 1px solid var(--color-border);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     animation: slideInUp 0.4s ease-out;
   }
 
@@ -3686,9 +4147,11 @@
     letter-spacing: 0.3px;
   }
   .send-balance-value {
+    font-family: var(--font-mono), ui-monospace, monospace;
     font-size: var(--font-size-base, 14px);
     font-weight: var(--font-weight-semibold, 600);
     color: var(--color-text);
+    letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
   }
   .send-balance-fiat {
@@ -4006,6 +4469,35 @@
 
   .qr-modal {
     max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .qr-modal h3 {
+    text-align: center;
+    width: 100%;
+  }
+
+  .qr-modal .qr-container {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .qr-modal .modal-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Pairing UI later sets `.qr-code { display: flex }` for div wrappers; the send
+   * modal uses `<img class="qr-code">` — override with higher specificity so the
+   * image centers reliably. */
+  .qr-modal .qr-container img {
+    display: block;
+    margin-inline: auto;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-small, 8px);
   }
 
   .qr-container {
@@ -4017,12 +4509,6 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-small, 8px);
     margin: 16px 0;
-  }
-
-  .qr-code {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--radius-small, 8px);
   }
 
   .qr-instructions {
@@ -4065,7 +4551,6 @@
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
     padding: 12px;
-    margin-top: 20px;
     display: block !important; /* header is block; children are absolute */
   }
   .app-header-left {
@@ -4102,16 +4587,26 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    border: none;
+    border: 1px solid var(--glass-stroke, var(--color-border));
     border-radius: 8px;
-    background: var(--color-disabled);
+    background: var(--glass-pane-bg, var(--color-disabled));
     color: var(--color-text);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 35%, transparent),
+      0 2px 10px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
   }
   .header-price-btn:hover {
-    background: var(--color-border);
+    background: var(--glass-pane-bg-solid, var(--color-border));
+    border-color: var(--color-primary);
   }
   .header-price-icon {
     display: block;
@@ -4134,7 +4629,7 @@
     width: 100%;
     min-width: 0;
     margin-top: 48px;
-    padding-top: 12px;
+    padding-top: 8px;
     min-height: 0;
     box-sizing: border-box;
   }
@@ -4963,7 +5458,7 @@
 
   :global(.popup-root .app-header) {
     position: fixed !important;
-    top: 32px !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
@@ -4999,7 +5494,7 @@
     flex-direction: column;
     overflow: auto;
     margin-top: 48px !important;
-    padding-top: 16px !important;
+    padding-top: 8px !important;
     min-height: 0;
     box-sizing: border-box;
   }
@@ -5198,44 +5693,5 @@
     padding: 8px 14px;
   }
 
-  /* Expanded / full-tab view: allow the app to fill the browser tab.
-     Placed last so it wins over the fixed 380px popup rules above. */
-  @media (min-width: 601px) {
-    /* Match app.css specificity so this isn’t overridden by critical header rules */
-    :global(html body[data-sveltekit-preload-data="hover"] .app-header) {
-      left: 50% !important;
-      right: auto !important;
-      transform: translateX(-50%) !important;
-    }
-    :global(html) {
-      width: 100% !important;
-      min-height: 100vh !important;
-      height: auto !important;
-      overflow-y: auto !important;
-      overflow-x: hidden !important;
-      display: flex !important;
-      justify-content: center !important;
-      background: var(--color-background);
-    }
-    :global(body) {
-      width: 100% !important;
-      max-width: 900px !important;
-      min-height: 100vh !important;
-      height: auto !important;
-      margin: 0 !important;
-      overflow-y: auto !important;
-      overflow-x: hidden !important;
-    }
-    :global(body[data-sveltekit-preload-data="hover"]) {
-      width: 100% !important;
-      max-width: 900px !important;
-    }
-    .wallet {
-      max-width: 900px;
-      overflow: visible;
-    }
-    .popup-root {
-      overflow: visible;
-    }
-  }
+  /* Expanded / full-tab (min-width: 601px): full-bleed background + centered column — see static/app.css */
 </style>
