@@ -1,11 +1,7 @@
 {
 	"name": "boldchrome",
 	"private": true,
-<<<<<<< HEAD
-	"version": "1.0.4",
-=======
-	"version": "1.0.5",
->>>>>>> origin/main
+	"version": "1.0.6",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -46,3 +42,4 @@
 		"sveltekit-adapter-chrome-extension": "^2.0.1"
 	}
 }
+

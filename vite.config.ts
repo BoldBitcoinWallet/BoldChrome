@@ -1,5 +1,4 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-<<<<<<< HEAD
 import { defineConfig, build as viteBuild, type Plugin } from 'vite';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
@@ -36,22 +35,13 @@ function buildBackgroundScript(): Plugin {
 		}
 	};
 }
-=======
-import { defineConfig } from 'vite';
-import wasm from 'vite-plugin-wasm';
-import topLevelAwait from 'vite-plugin-top-level-await';
->>>>>>> origin/main
 
 export default defineConfig({
 	plugins: [
 		wasm(),
 		topLevelAwait(),
-<<<<<<< HEAD
 		sveltekit(),
 		buildBackgroundScript()
-=======
-		sveltekit()
->>>>>>> origin/main
 	],
 	build: {
 		// Optimize for Chrome extension

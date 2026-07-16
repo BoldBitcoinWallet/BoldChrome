@@ -495,12 +495,6 @@ export async function runHdDiscovery(force = false, overrideAddressType?: 'segwi
 /**
  * Switch the active address type, re-run HD discovery, and refresh wallet data.
  */
-<<<<<<< HEAD
-export async function switchAddressType(newType: 'segwit-native' | 'segwit-nested' | 'legacy'): Promise<void> {
-  const state = getStoreValue();
-  if (state.hdState?.addressType === newType) return;
-  await runHdDiscovery(true, newType);
-=======
 export async function switchAddressType(newType: AddressTypeOption): Promise<void> {
   const state = getStoreValue();
   if (!state.hdState || state.hdState.addressType === newType) return;
@@ -518,7 +512,6 @@ export async function switchAddressType(newType: AddressTypeOption): Promise<voi
   } finally {
     addressTypeUISelection.set(null);
   }
->>>>>>> origin/main
 }
 
 /**
