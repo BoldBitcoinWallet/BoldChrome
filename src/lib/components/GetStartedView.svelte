@@ -122,7 +122,8 @@
         on:click={runSequence}
         on:keydown={(e) => e.key === 'Enter' && runSequence()}
       >
-        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="gs-block-svg">
+        <!-- 3-D depth faces (SVG layer — no text, no centering concerns) -->
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="gs-block-depth" aria-hidden="true">
           <defs>
             <linearGradient id="blk-face" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%"   stop-color="#3a3a3a"/>
@@ -144,13 +145,14 @@
           <!-- Border -->
           <rect x="6" y="6" width="58" height="58" rx="4" fill="none"
                 stroke="#555" stroke-width="1"/>
-          <!-- Gold '?' -->
-          <text x="34" y="46" text-anchor="middle" font-size="32" font-weight="900"
-                fill="#E6C435" font-family="Inter,Arial,sans-serif"
-                style="text-shadow:0 2px 8px rgba(230,196,53,0.6)">?</text>
           <!-- Top highlight line -->
           <rect x="10" y="9" width="44" height="3" rx="1" fill="rgba(255,255,255,0.08)"/>
         </svg>
+        <!-- Front face overlay: bounded to the SVG front rect (x=6,y=6, 58×58 px) -->
+        <!-- Flexbox centering here is independent of the 3-D depth edges       -->
+        <div class="gs-block-front">
+          <span class="gs-block-qmark">?</span>
+        </div>
       </div>
     {/if}
 
@@ -375,13 +377,42 @@
   .gs-block:active {
     transform: translateX(-50%) translateY(1px) scale(0.94);
   }
-  .gs-block-svg {
+  .gs-block-depth {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     display: block;
-    /* 3-D depth via drop shadow */
     filter: drop-shadow(0 6px 14px rgba(0,0,0,0.7))
             drop-shadow(0 2px 4px rgba(230,196,53,0.2));
+  }
+
+  /* Overlay precisely covers the SVG front face rect: x=6 y=6 w=58 h=58 */
+  /* (The .gs-block is 64×64px matching the SVG viewBox 0 0 64 64)          */
+  .gs-block-front {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    width: 58px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .gs-block-qmark {
+    display: block;
+    font-size: 32px;
+    font-weight: 900;
+    line-height: 1;
+    color: #E6C435;
+    font-family: Inter, Arial, sans-serif;
+    text-shadow: 0 2px 8px rgba(230, 196, 53, 0.6);
+    /* Sans-serif glyphs carry ~8% baseline padding below the cap-height;
+       this nudge compensates so the "?" sits visually centred in the face. */
+    transform: translateY(-4%);
+    user-select: none;
   }
 
   /* ════════════════════════════════════════════════════════════════════════════
