@@ -41,6 +41,34 @@ html[data-theme='darkPolished'] {
   --glass-modal-scrim-dark: color-mix(in srgb, #000000 55%, transparent);
 }
 
+/*
+ * Palette-aware glass morphism (macOS Ventura+ style): frosted surfaces use color-mix
+ * on Bold theme tokens — no new hex colors beyond what the palette already defines.
+ */
+html[data-theme='lightPolished'] {
+  --glass-blur: clamp(18px, 5vw, 28px);
+  --glass-sat: 172%;
+  --glass-pane-bg: color-mix(in srgb, var(--color-cardBackground) 56%, transparent);
+  --glass-pane-bg-solid: color-mix(in srgb, var(--color-cardBackground) 72%, transparent);
+  --glass-stroke: color-mix(in srgb, var(--color-white) 26%, transparent);
+  --glass-inset-highlight: color-mix(in srgb, var(--color-white) 45%, transparent);
+  --glass-ambient: color-mix(in srgb, var(--color-shadowColor) 7%, transparent);
+  --glass-header-bg: color-mix(in srgb, var(--color-background) 38%, transparent);
+  --glass-modal-scrim-light: color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+html[data-theme='darkPolished'] {
+  --glass-blur: clamp(22px, 5vw, 34px);
+  --glass-sat: 148%;
+  --glass-pane-bg: color-mix(in srgb, var(--color-cardBackground) 50%, transparent);
+  --glass-pane-bg-solid: color-mix(in srgb, var(--color-cardBackground) 68%, transparent);
+  --glass-stroke: color-mix(in srgb, var(--color-border) 58%, transparent);
+  --glass-inset-highlight: color-mix(in srgb, var(--color-white) 9%, transparent);
+  --glass-ambient: rgba(0, 0, 0, 0.38);
+  --glass-header-bg: color-mix(in srgb, var(--color-background) 34%, transparent);
+  --glass-modal-scrim-dark: color-mix(in srgb, #000000 55%, transparent);
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -90,6 +118,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root {
   isolation: isolate;
   overflow: hidden;
   background-color: var(--color-background);
+<<<<<<< HEAD
   /* Clean solid background for side panel — gradient only on launch screen */
 }
 html body[data-sveltekit-preload-data="hover"] .popup-root.launch-screen {
@@ -111,6 +140,23 @@ html body[data-sveltekit-preload-data="hover"] .popup-root.launch-screen {
       ellipse 95% 40% at 50% 0%,
       color-mix(in srgb, var(--color-secondary) 12%, transparent) 0%,
       transparent 52%
+=======
+  background-image:
+    radial-gradient(
+      ellipse 125% 100% at 12% -12%,
+      color-mix(in srgb, var(--color-secondary) 16%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 90% 82% at 96% 4%,
+      color-mix(in srgb, var(--color-accent) 10%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 72% 55% at 48% 108%,
+      color-mix(in srgb, var(--color-primary) 7%, transparent) 0%,
+      transparent 58%
+>>>>>>> origin/main
     );
 }
 /* Global toast – fixed at top center; compact width (not full tab); glassy + readable */

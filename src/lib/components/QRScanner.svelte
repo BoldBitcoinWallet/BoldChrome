@@ -155,37 +155,48 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--color-background);
+    background: rgba(0, 0, 0, 0.45);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 1100;
     backdrop-filter: blur(6px);
+    padding: 12px;
+    box-sizing: border-box;
   }
 
   .scanner-modal {
-    background: var(--color-cardBackground); color: var(--color-text);
+    background: var(--color-cardBackground);
+    color: var(--color-text);
     border-radius: 20px;
-    padding: 1.5rem;
-    max-width: 300px;
-    width: 90%;
-    max-height: 90vh;
-    overflow: auto;
+    padding: 1rem 1.25rem 1.25rem;
+    width: min(292px, 100%);
+    max-width: 100%;
+    max-height: min(560px, 100vh - 24px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     border: 1px solid var(--color-border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    box-sizing: border-box;
+    margin: 0 auto;
   }
 
   .scanner-header {
+    align-self: stretch;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
+    min-height: 36px;
   }
 
   .close-btn {
     background: rgba(255, 255, 255, 0.08);
     border: none;
     font-size: 1.5rem;
+    line-height: 1;
     cursor: pointer;
     padding: 0;
     width: 36px;
@@ -203,45 +214,28 @@
     background: rgba(255, 193, 7, 0.1);
   }
 
+  /* Square preview: video fills box; frame stays centered */
   .scanner-container {
     position: relative;
-    width: 250px;
-    background: var(--color-cardBackground); /* themed background for camera area */
+    width: min(260px, calc(100vw - 48px));
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+    background: #0a0a0a;
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid var(--color-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    max-width:320px;
-    min-height: 320px; /* ensure camera area is large enough for frame */
-  }
-
-  .scanner-frame {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 220px;
-    height: 220px;
-    border: 3px solid var(--color-accent);
-    border-radius: 12px;
-    box-shadow: 0 0 0 99999px rgba(0,0,0,0.03), 0 0 30px var(--color-accent);
-  }
-
-  .help-text {
-    text-align: center;
-    margin-top: 1rem;
-    color: var(--color-textSecondary);
-    font-size: 0.9rem;
+    flex-shrink: 0;
   }
 
   .scanner-video {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
-    min-height: 320px;
+    object-fit: cover;
+    object-position: center;
     display: block;
-    object-fit: cover; /* ensure video fills the container and doesn't appear small */
   }
 
   .scanner-frame {
@@ -249,35 +243,44 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 250px;
-    height: 250px;
+    width: 72%;
+    height: 72%;
+    max-width: 220px;
+    max-height: 220px;
+    box-sizing: border-box;
     border: 3px solid var(--color-accent);
-    border-radius: 16px;
-    box-shadow: 0 0 0 99999px rgba(0, 0, 0, 0.6),
-                0 0 30px var(--color-accent),
-                inset 0 0 20px rgba(255,193,7,0.1);
+    border-radius: 12px;
+    pointer-events: none;
+    box-shadow:
+      0 0 0 99999px rgba(0, 0, 0, 0.55),
+      0 0 24px color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
 
   .help-text {
+    align-self: stretch;
     text-align: center;
-    margin-top: 1rem;
+    margin: 1rem 0 0;
+    padding: 0 4px;
     color: var(--color-textSecondary);
-    font-size: 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.35;
   }
 
   .error {
-    background: rgba(244,67,54,0.08);
+    background: rgba(244, 67, 54, 0.08);
     color: var(--color-error);
     padding: 1.5rem;
     border-radius: 12px;
     margin-bottom: 1rem;
     line-height: 1.6;
-    border: 1px solid rgba(244,67,54,0.2);
+    border: 1px solid rgba(244, 67, 54, 0.2);
+    align-self: stretch;
+    box-sizing: border-box;
   }
 
   .error p {
     margin: 0.5rem 0;
-    color: rgba(244,67,54,0.6);
+    color: rgba(244, 67, 54, 0.75);
   }
 
   .error p:first-child {

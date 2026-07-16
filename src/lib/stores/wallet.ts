@@ -98,6 +98,10 @@ export const balance = derived(walletStore, $wallet => ({
 
 export const transactionList = derived(walletStore, $wallet => $wallet.transactions);
 
+/** While switching address script type, mirrors the target type so the UI highlights before hdState updates */
+export type AddressTypeOption = 'segwit-native' | 'segwit-nested' | 'legacy';
+export const addressTypeUISelection = writable<AddressTypeOption | null>(null);
+
 /**
  * Reset wallet to unpaired state (clear pairing data from storage and store)
  */
@@ -126,6 +130,7 @@ export async function resetWallet() {
     isLoading: false,
     error: undefined
   });
+  addressTypeUISelection.set(null);
 }
 
 /**
@@ -490,10 +495,30 @@ export async function runHdDiscovery(force = false, overrideAddressType?: 'segwi
 /**
  * Switch the active address type, re-run HD discovery, and refresh wallet data.
  */
+<<<<<<< HEAD
 export async function switchAddressType(newType: 'segwit-native' | 'segwit-nested' | 'legacy'): Promise<void> {
   const state = getStoreValue();
   if (state.hdState?.addressType === newType) return;
   await runHdDiscovery(true, newType);
+=======
+export async function switchAddressType(newType: AddressTypeOption): Promise<void> {
+  const state = getStoreValue();
+  if (!state.hdState || state.hdState.addressType === newType) return;
+
+  addressTypeUISelection.set(newType);
+
+  try {
+    const ran = await runHdDiscovery(true, newType);
+    if (!ran) {
+      throw new Error('Could not switch address format right now.');
+    }
+  } catch (err) {
+    console.error('[Wallet] switchAddressType failed:', err);
+    throw err;
+  } finally {
+    addressTypeUISelection.set(null);
+  }
+>>>>>>> origin/main
 }
 
 /**

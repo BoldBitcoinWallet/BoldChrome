@@ -29,6 +29,10 @@
     getCurrentReceiveAddress,
     runHdDiscovery,
     switchAddressType,
+<<<<<<< HEAD
+=======
+    addressTypeUISelection,
+>>>>>>> origin/main
   } from "$lib/stores/wallet";
   import { qr } from "$lib/services/qr";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
@@ -49,7 +53,35 @@
     PIN_MAX_LENGTH,
   } from "$lib/services/pin";
   import lockerIcon from "$lib/assets/locker-icon.png";
+<<<<<<< HEAD
   import GetStartedView from "$lib/components/GetStartedView.svelte";
+=======
+  import { keyshareFingerprint as computeKeyshareFingerprint } from "$lib/services/keyshareFingerprint";
+
+  function getExtensionVersionLabel(): string {
+    try {
+      const cr = (
+        globalThis as {
+          chrome?: {
+            runtime?: {
+              getManifest?: () => { version?: string; version_name?: string };
+            };
+          };
+        }
+      ).chrome;
+      if (!cr?.runtime?.getManifest) return "";
+      const m = cr.runtime.getManifest();
+      const named =
+        typeof m.version_name === "string" ? m.version_name.trim() : "";
+      if (named) return named;
+      const v = typeof m.version === "string" ? m.version.trim() : "";
+      return v ? `v${v}` : "";
+    } catch {
+      return "";
+    }
+  }
+  const extensionVersionLabel = getExtensionVersionLabel();
+>>>>>>> origin/main
 
   // PIN lock state
   let pinHash: string | null = null;
@@ -161,6 +193,13 @@
   $: isPaired =
     !!$walletStore.publicKey && $walletStore.publicKey.trim() !== "";
 
+<<<<<<< HEAD
+=======
+  $: keyshareFingerprintDisplay = computeKeyshareFingerprint(
+    $walletStore.publicKey,
+  );
+
+>>>>>>> origin/main
   // Debug logging
   $: console.log("[popup.html] Wallet state:", {
     publicKey: $walletStore.publicKey?.substring(0, 20) + "...",
@@ -181,8 +220,13 @@
   let balance = 0; // Will be populated from store
   let fiat = 0; // Will be populated from store
   let showBalance = true; // toggle to hide/show balance
+<<<<<<< HEAD
   let isRefreshing = false;
   let showAddressDropdown = false;
+=======
+  let showWalletSettingsMenu = false;
+  let isRefreshing = false;
+>>>>>>> origin/main
   let requestingAddresses = false;
 
   // Mempool provider: null = not chosen (show preference after pairing), '' = default, string = custom URL. 'loading' = init.
@@ -361,6 +405,29 @@
     applyTheme(next);
   }
 
+<<<<<<< HEAD
+=======
+  function toggleWalletSettingsMenu() {
+    showWalletSettingsMenu = !showWalletSettingsMenu;
+  }
+
+  function closeWalletSettingsMenu() {
+    showWalletSettingsMenu = false;
+  }
+
+  function handleWalletSettingsEscape(e: KeyboardEvent) {
+    if (showWalletSettingsMenu && e.key === "Escape") {
+      e.preventDefault();
+      closeWalletSettingsMenu();
+    }
+  }
+
+  async function onSettingsSyncAddresses() {
+    closeWalletSettingsMenu();
+    await handleRequestAddresses();
+  }
+
+>>>>>>> origin/main
   async function handleUnpair() {
     if (
       !confirm(
@@ -368,6 +435,10 @@
       )
     )
       return;
+<<<<<<< HEAD
+=======
+    showWalletSettingsMenu = false;
+>>>>>>> origin/main
     await resetWallet();
     pairingStep = 0;
     pairingStatus = "Click logo to start pairing";
@@ -433,11 +504,18 @@
 
   // Convert wallet transactions to UI format (app-aligned: status, amount, address, txid, time)
   $: btcRate = btcRateForFiat;
+<<<<<<< HEAD
   $: activeAddressTypeId = $walletStore.hdState?.addressType || "segwit-native";
   $: selectedAddressType = (() => {
     const t = ADDRESS_TYPES.find((a) => a.id === activeAddressTypeId);
     return t?.label || "Native SegWit";
   })();
+=======
+  $: activeAddressTypeId =
+    $walletStore.hdState?.addressType || "segwit-native";
+  $: settingsHighlightedAddressType =
+    $addressTypeUISelection ?? activeAddressTypeId;
+>>>>>>> origin/main
   $: selectedAddressShort = (() => {
     if (!$walletStore.address) return "";
     const raw = $walletStore.address;
@@ -679,6 +757,23 @@
       toastTimer = null;
     }, 3200);
   }
+<<<<<<< HEAD
+=======
+
+  async function copyWalletFingerprint() {
+    const id = keyshareFingerprintDisplay;
+    if (!id || id === "N/A") {
+      triggerToast("No Fingerprint to copy", "error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(id);
+      triggerToast("Fingerprint copied", "success");
+    } catch {
+      triggerToast("Could not copy", "error");
+    }
+  }
+>>>>>>> origin/main
   let showQRModal = false;
   let qrCodeDataUrl = "";
   let qrModalTitle = "";
@@ -951,6 +1046,7 @@
     { id: "legacy" as const, label: "Legacy", prefix: "1..." },
   ];
 
+<<<<<<< HEAD
   let switchingAddressType = false;
 
   function toggleAddressDropdown() {
@@ -968,6 +1064,28 @@
       await switchAddressType(typeId);
     } finally {
       switchingAddressType = false;
+=======
+  async function handleSelectAddressType(
+    typeId: "segwit-native" | "segwit-nested" | "legacy",
+  ) {
+    const current = get(walletStore).hdState?.addressType;
+    if (current === typeId) {
+      closeWalletSettingsMenu();
+      return;
+    }
+
+    try {
+      await switchAddressType(typeId);
+      closeWalletSettingsMenu();
+    } catch (e) {
+      console.error("Address type switch failed:", e);
+      triggerToast(
+        e instanceof Error
+          ? e.message
+          : "Could not switch address format. Try again.",
+        "error",
+      );
+>>>>>>> origin/main
     }
   }
 
@@ -1374,6 +1492,10 @@
   });
 </script>
 
+<<<<<<< HEAD
+=======
+<svelte:window on:keydown={handleWalletSettingsEscape} />
+>>>>>>> origin/main
 <div
   class="popup-root"
   class:unpaired={!isPaired && !showCameraPermissionScreen}
@@ -1530,6 +1652,7 @@
             </svg>
           </button>
         {/if}
+<<<<<<< HEAD
         <button
           class="theme-toggle"
           on:click={toggleTheme}
@@ -1546,6 +1669,8 @@
             height="20"
           />
         </button>
+=======
+>>>>>>> origin/main
         {#if showMainApp}
           <button
             type="button"
@@ -1592,6 +1717,7 @@
             />
           </button>
           <button
+<<<<<<< HEAD
             class="unpair-btn"
             on:click={handleUnpair}
             title="Unpair wallet"
@@ -1601,6 +1727,42 @@
               src={deleteIcon}
               alt=""
               class="header-icon unpair-icon"
+=======
+            type="button"
+            class="wallet-settings-btn"
+            on:click={toggleWalletSettingsMenu}
+            title="Wallet details and settings"
+            aria-label="Wallet details and settings"
+            aria-expanded={showWalletSettingsMenu}
+            aria-haspopup="dialog"
+          >
+            <svg
+              class="header-icon wallet-settings-icon"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+        {:else if isPaired || pairingStep > 0}
+          <button
+            class="theme-toggle"
+            on:click={toggleTheme}
+            title={$themeName === "darkPolished"
+              ? "Switch to light"
+              : "Switch to dark"}
+            aria-label="Toggle theme"
+          >
+            <img
+              src={$themeName === "darkPolished" ? lightIcon : darkIcon}
+              alt=""
+              class="header-icon theme-toggle-icon"
+>>>>>>> origin/main
               width="20"
               height="20"
             />
@@ -1610,6 +1772,162 @@
     </header>
   {/if}
 
+<<<<<<< HEAD
+=======
+  {#if showWalletSettingsMenu && showMainApp}
+    <div
+      class="modal mempool-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wallet-settings-title"
+      tabindex="-1"
+      on:click={closeWalletSettingsMenu}
+      on:keydown={(e) => e.key === "Escape" && closeWalletSettingsMenu()}
+    >
+      <!-- svelte-ignore a11y_click_events_have_key_events: stop modal backdrop from receiving bubbled clicks from the panel -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <div
+        id="wallet-settings-panel"
+        class="modal-card wallet-settings-sheet"
+        role="document"
+        tabindex="-1"
+        on:click|stopPropagation
+      >
+      <div class="wallet-settings-head">
+        <h2 id="wallet-settings-title" class="wallet-settings-title">
+          Wallet details
+        </h2>
+        <button
+          type="button"
+          class="wallet-settings-close"
+          on:click={closeWalletSettingsMenu}
+          aria-label="Close wallet settings"
+        >✕</button>
+      </div>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Fingerprint</h3>
+        <p class="wallet-settings-hint">
+          Short fingerprint for this wallet
+        </p>
+        <div class="wallet-settings-fingerprint-row">
+          <span class="wallet-settings-fingerprint-value">
+            {keyshareFingerprintDisplay}
+          </span>
+          <button
+            type="button"
+            class="wallet-id-copy"
+            on:click={copyWalletFingerprint}
+            disabled={keyshareFingerprintDisplay === "N/A"}
+            title="Copy fingerprint"
+            aria-label="Copy fingerprint"
+          >
+            Copy
+          </button>
+        </div>
+      </section>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Appearance</h3>
+        <div class="wallet-settings-row">
+          <span class="wallet-settings-row-text">
+            {$themeName === "darkPolished" ? "Dark theme" : "Light theme"}
+          </span>
+          <button
+            type="button"
+            class="wallet-settings-theme-btn"
+            on:click={toggleTheme}
+            title={$themeName === "darkPolished"
+              ? "Switch to light mode"
+              : "Switch to dark mode"}
+          >
+            <img
+              src={$themeName === "darkPolished" ? lightIcon : darkIcon}
+              alt=""
+              class="header-icon"
+              width="20"
+              height="20"
+            />
+          </button>
+        </div>
+      </section>
+
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Receiving address format</h3>
+        {#if selectedAddressShort}
+          <p class="wallet-settings-address-preview">{selectedAddressShort}</p>
+        {/if}
+        {#if $walletStore.publicKey}
+          {#if $addressTypeUISelection}
+            <p class="wallet-settings-switching" aria-live="polite">
+              Switching to {$addressTypeUISelection === "segwit-native"
+                ? "Native SegWit"
+                : $addressTypeUISelection === "segwit-nested"
+                  ? "SegWit compatible"
+                  : "Legacy"}… fetching addresses
+            </p>
+          {/if}
+          <ul class="wallet-settings-address-list">
+            {#each ADDRESS_TYPES as atype}
+              <li>
+                <button
+                  type="button"
+                  class="address-item wallet-settings-address-item"
+                  class:active={settingsHighlightedAddressType === atype.id}
+                  disabled={!!$addressTypeUISelection}
+                  on:click={() => handleSelectAddressType(atype.id)}
+                >
+                  <img
+                    src={addressTypeIcon}
+                    alt=""
+                    class="address-type-icon"
+                    width="18"
+                    height="18"
+                  />
+                  <div class="address-info">
+                    <div class="address-text">{atype.label}</div>
+                    <div class="address-prefix">{atype.prefix}</div>
+                  </div>
+                  {#if settingsHighlightedAddressType === atype.id}
+                    <span class="address-check">✓</span>
+                  {/if}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <button
+            type="button"
+            class="wallet-settings-sync-btn"
+            disabled={requestingAddresses}
+            on:click={onSettingsSyncAddresses}
+          >
+            {requestingAddresses ? "Opening…" : "Sync addresses from mobile"}
+          </button>
+        {/if}
+      </section>
+
+      <section class="wallet-settings-block wallet-settings-danger">
+        <button
+          type="button"
+          class="wallet-settings-unpair-btn"
+          on:click={handleUnpair}
+        >
+          <img
+            src={deleteIcon}
+            alt=""
+            class="wallet-settings-unpair-icon"
+            width="18"
+            height="18"
+          />
+          Unpair wallet
+        </button>
+      </section>
+    </div>
+    </div>
+  {/if}
+
+>>>>>>> origin/main
   <!-- Global toast (always visible when message set, regardless of paired/unpaired) -->
   {#if toastMessage}
     <div
@@ -1633,6 +1951,7 @@
     {:else if showLockScreen}
       <!-- Lock screen: require PIN to unlock -->
       <div class="pin-screen lock-screen">
+<<<<<<< HEAD
         <div class="pin-screen-card">
           <img
             src={$themeName === "darkPolished" ? logoSmallDark : logo}
@@ -1665,6 +1984,47 @@
             <button type="submit" class="btn-primary pin-submit">Unlock</button>
           </form>
         </div>
+=======
+        <div class="lock-screen-main">
+          <div class="pin-screen-card">
+            <img
+              src={$themeName === "darkPolished" ? logoSmallDark : logo}
+              alt=""
+              class="pin-screen-logo"
+              width="56"
+              height="56"
+            />
+            <h2 class="pin-screen-title">Unlock extension</h2>
+            <p class="pin-screen-hint">Enter your PIN to continue</p>
+            <form on:submit|preventDefault={handleUnlock} class="pin-form">
+              <input
+                type="password"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                autocomplete="off"
+                placeholder="PIN"
+                bind:value={unlockPinValue}
+                class="pin-input"
+                maxlength={PIN_MAX_LENGTH}
+                aria-label="PIN"
+                aria-invalid={!!unlockError}
+                aria-describedby={unlockError ? "unlock-pin-error" : undefined}
+              />
+              {#if unlockError}
+                <p id="unlock-pin-error" class="pin-error" role="alert">
+                  {unlockError}
+                </p>
+              {/if}
+              <button type="submit" class="btn-primary pin-submit">Unlock</button>
+            </form>
+          </div>
+        </div>
+        {#if extensionVersionLabel}
+          <p class="lock-screen-version" aria-label="Extension version">
+            {extensionVersionLabel}
+          </p>
+        {/if}
+>>>>>>> origin/main
       </div>
     {:else if showMempoolPreferenceScreen}
       <!-- Mempool provider: choose custom or skip for default (after pairing, once) -->
@@ -1779,7 +2139,30 @@
       <div class="pairing-container" class:steps-active={pairingStep > 0}>
         <div class="pairing-body" class:steps-active={pairingStep > 0}>
           {#if pairingStep === 0}
+<<<<<<< HEAD
             <GetStartedView onBind={handlePairDevice} />
+=======
+            <div class="pairing-start">
+              <div class="pairing-logo" aria-hidden="true">
+                <img
+                  src={logo}
+                  alt=""
+                  class="app-logo"
+                  width="80"
+                  height="80"
+                />
+              </div>
+              <h1 class="pairing-get-started">Get Started</h1>
+              <p class="pairing-cta">Connect in 2 steps with your Bold app.</p>
+              <button
+                type="button"
+                class="btn-primary pairing-bind-btn"
+                on:click={handlePairDevice}
+              >
+                Bind wallet
+              </button>
+            </div>
+>>>>>>> origin/main
           {/if}
 
           {#if pairingStep > 0}
@@ -1981,6 +2364,7 @@
             </div>
           </section>
 
+<<<<<<< HEAD
           <section class="address-selector">
             {#if $walletStore.publicKey}
               <div class="address-selector-inner">
@@ -2057,6 +2441,8 @@
             {/if}
           </section>
 
+=======
+>>>>>>> origin/main
           <section class="actions-row">
             <button class="action-btn send-btn" on:click={openSend}>
               <img
@@ -2710,7 +3096,11 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
+<<<<<<< HEAD
     background: var(--color-background);
+=======
+    background: transparent;
+>>>>>>> origin/main
     overflow: hidden;
     position: relative;
     box-sizing: border-box;
@@ -2736,15 +3126,32 @@
     padding: 0;
     border: none;
     border-radius: var(--radius-small);
+<<<<<<< HEAD
     background: var(--color-cardBackground);
+=======
+    background: var(--glass-pane-bg, var(--color-cardBackground));
+>>>>>>> origin/main
     color: var(--color-text);
     cursor: pointer;
     transition:
       background 0.2s,
+<<<<<<< HEAD
       transform 0.2s;
   }
   .lock-btn:hover {
     background: var(--color-border);
+=======
+      transform 0.2s,
+      box-shadow 0.2s;
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+  }
+  .lock-btn:hover {
+    background: var(--glass-pane-bg-solid, var(--color-border));
+>>>>>>> origin/main
     transform: scale(1.05);
   }
   .lock-icon {
@@ -2764,7 +3171,11 @@
     min-height: 0;
     flex: 1;
     color: var(--color-text);
+<<<<<<< HEAD
     background: var(--color-background);
+=======
+    background: transparent;
+>>>>>>> origin/main
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -2777,6 +3188,7 @@
     flex: 1;
     overflow-x: hidden;
     overflow-y: auto;
+<<<<<<< HEAD
     padding: 0 12px 12px;
     box-sizing: border-box;
   }
@@ -2790,6 +3202,17 @@
     border: 1px solid var(--color-border);
     border-radius: 10px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+=======
+    padding: 0 var(--space-small) var(--space-medium);
+    box-sizing: border-box;
+  }
+
+  /* Structural only — glass surface from app.css (.popup-root .balance-card) */
+  .balance-card {
+    margin-top: 0;
+    margin-bottom: 0;
+    padding: 12px;
+>>>>>>> origin/main
     box-sizing: border-box;
     min-width: 0;
   }
@@ -2802,6 +3225,310 @@
     min-height: 44px;
     min-width: 0;
   }
+<<<<<<< HEAD
+=======
+
+  /* Wallet details: full-viewport backdrop + centered card (same pattern as mempool provider modal via .modal + .mempool-modal) */
+
+  .wallet-settings-sheet.modal-card {
+    width: min(356px, 92vw);
+    max-width: 356px;
+    max-height: min(560px, 85dvh);
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 0 12px;
+    box-sizing: border-box;
+  }
+
+
+
+  .wallet-settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 12px 8px;
+    border-bottom: 1px solid var(--glass-stroke, var(--color-border));
+    position: sticky;
+    top: 0;
+    background: var(--glass-pane-bg, var(--color-cardBackground));
+    backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-sat, 160%));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 20px))
+      saturate(var(--glass-sat, 160%));
+    z-index: 1;
+  }
+
+  .wallet-settings-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .wallet-settings-close {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-textSecondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+
+  .wallet-settings-close:hover {
+    background: var(--color-background);
+    color: var(--color-text);
+  }
+
+  .wallet-settings-block {
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-block:last-child {
+    border-bottom: none;
+  }
+
+  .wallet-settings-label {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-textSecondary);
+  }
+
+  .wallet-settings-hint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--color-textSecondary);
+  }
+
+  .wallet-settings-fingerprint-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: color-mix(
+      in srgb,
+      var(--color-background) 70%,
+      var(--color-cardBackground)
+    );
+    min-width: 0;
+  }
+
+  .wallet-settings-fingerprint-value {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .wallet-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .wallet-settings-row-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .wallet-settings-theme-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-background);
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      transform 0.15s;
+  }
+
+  .wallet-settings-theme-btn:hover {
+    border-color: var(--color-primary);
+    transform: scale(1.04);
+  }
+
+  .wallet-settings-theme-btn img {
+    display: block;
+    opacity: 0.95;
+  }
+
+  .wallet-settings-address-preview {
+    margin: 0 0 8px;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--color-textSecondary);
+    word-break: break-all;
+    text-align: center;
+    padding: 6px 8px;
+    background: var(--color-background);
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-switching {
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-textSecondary);
+    text-align: center;
+    padding: 8px;
+  }
+
+  .wallet-settings-address-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .wallet-settings-address-list li {
+    margin: 0;
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item {
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item:disabled {
+    opacity: 0.58;
+    cursor: wait;
+  }
+
+  .wallet-settings-sheet .wallet-settings-address-item:last-child {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .wallet-settings-sync-btn {
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--color-primary);
+    color: var(--color-textOnPrimary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }
+
+  .wallet-settings-sync-btn:hover:not(:disabled) {
+    filter: brightness(0.95);
+  }
+
+  .wallet-settings-sync-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .wallet-settings-danger {
+    padding-top: 8px;
+  }
+
+  .wallet-settings-unpair-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--color-error) 10%,
+      var(--color-cardBackground)
+    );
+    color: var(--color-error);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
+  }
+
+  .wallet-settings-unpair-btn:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-error) 16%,
+      var(--color-cardBackground)
+    );
+    border-color: var(--color-error);
+  }
+
+  .wallet-settings-unpair-icon {
+    display: block;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  :global([data-theme="darkPolished"]) .wallet-settings-unpair-icon {
+    filter: brightness(0) invert(1);
+    opacity: 0.9;
+  }
+
+  .wallet-id-copy {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: var(--color-cardBackground);
+    color: var(--color-textSecondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .wallet-id-copy:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+    background: var(--color-background);
+  }
+
+  .wallet-id-copy:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+>>>>>>> origin/main
   .balance-loading {
     display: flex;
     align-items: center;
@@ -2887,7 +3614,11 @@
   .app-header .refresh-btn,
   .app-header .balance-visibility-btn,
   .app-header .expand-btn,
+<<<<<<< HEAD
   .app-header .unpair-btn {
+=======
+  .app-header .wallet-settings-btn {
+>>>>>>> origin/main
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2896,27 +3627,51 @@
     padding: 0;
     border: none;
     border-radius: 8px;
+<<<<<<< HEAD
     background: var(--color-cardBackground);
+=======
+    background: var(--glass-pane-bg, var(--color-cardBackground));
+>>>>>>> origin/main
     color: var(--color-text);
     cursor: pointer;
     transition:
       background 0.2s,
+<<<<<<< HEAD
       transform 0.2s;
     font-size: 16px;
+=======
+      transform 0.2s,
+      box-shadow 0.2s;
+    font-size: 16px;
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+>>>>>>> origin/main
   }
   .app-header .theme-toggle:hover:not(:disabled),
   .app-header .refresh-btn:hover:not(:disabled),
   .app-header .balance-visibility-btn:hover,
   .app-header .expand-btn:hover,
+<<<<<<< HEAD
   .app-header .unpair-btn:hover {
     background: var(--color-border);
+=======
+  .app-header .wallet-settings-btn:hover {
+    background: var(--glass-pane-bg-solid, var(--color-border));
+>>>>>>> origin/main
     transform: scale(1.05);
   }
   .app-header .theme-toggle:active,
   .app-header .refresh-btn:active,
   .app-header .balance-visibility-btn:active,
   .app-header .expand-btn:active,
+<<<<<<< HEAD
   .app-header .unpair-btn:active {
+=======
+  .app-header .wallet-settings-btn:active {
+>>>>>>> origin/main
     transform: scale(0.98);
   }
   .app-header .refresh-btn:disabled {
@@ -2970,9 +3725,16 @@
   }
 
   .amount {
+<<<<<<< HEAD
     font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.5px;
+=======
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+>>>>>>> origin/main
     color: var(--color-text);
     word-break: break-all;
     text-align: center;
@@ -2997,8 +3759,15 @@
   }
 
   .fiat {
+<<<<<<< HEAD
     color: var(--color-textSecondary);
     font-size: 12px;
+=======
+    font-family: var(--font-mono), ui-monospace, monospace;
+    color: var(--color-textSecondary);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+>>>>>>> origin/main
   }
 
   .fiat.placeholder {
@@ -3021,6 +3790,7 @@
     min-width: 0;
     width: 100%;
   }
+<<<<<<< HEAD
   /* Same width and style as balance-card so dropdown aligns */
   .address-selector-inner {
     padding: 12px;
@@ -3028,6 +3798,12 @@
     border: 1px solid var(--color-border);
     border-radius: 10px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+=======
+  /* Glass surface + chrome from app.css (.popup-root .address-selector-inner) */
+  .address-selector-inner {
+    padding: 12px;
+    border-radius: 10px;
+>>>>>>> origin/main
     box-sizing: border-box;
     min-width: 0;
     width: 100%;
@@ -3084,7 +3860,10 @@
     flex-shrink: 0;
     opacity: 0.9;
   }
+<<<<<<< HEAD
   :global([data-theme="darkPolished"]) .address-selector .address-type-icon,
+=======
+>>>>>>> origin/main
   :global([data-theme="darkPolished"]) .address-item .address-type-icon {
     filter: brightness(0) invert(1);
     opacity: 0.95;
@@ -3137,8 +3916,11 @@
     top: 100%;
     left: 0;
     right: 0;
+<<<<<<< HEAD
     background: var(--color-cardBackground);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+=======
+>>>>>>> origin/main
     z-index: 1000;
     margin-top: 4px;
     max-height: 220px;
@@ -3149,15 +3931,25 @@
     border-color: var(--color-border);
   }
   :global([data-theme="darkPolished"]) .address-dropdown {
+<<<<<<< HEAD
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+=======
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 30%, transparent),
+      0 12px 40px rgba(0, 0, 0, 0.45);
+>>>>>>> origin/main
     border-top: 1px solid var(--color-border);
     border-radius: 0 0 10px 10px;
     border-color: var(--color-secondary);
     padding: 4px;
   }
   :global([data-theme="darkPolished"]) .address-selector-inner {
+<<<<<<< HEAD
     background: var(--color-cardBackground);
     border-color: var(--color-border);
+=======
+    border-color: var(--glass-stroke, var(--color-border));
+>>>>>>> origin/main
   }
 
   .dropdown-header {
@@ -3425,11 +4217,19 @@
     display: block;
     width: 100%;
     padding: 10px 12px;
+<<<<<<< HEAD
     border: 1px solid var(--color-border);
     border-radius: 10px;
     background: var(--color-cardBackground);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     transition: background 0.2s;
+=======
+    border-radius: 10px;
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
+>>>>>>> origin/main
     animation: slideInUp 0.3s ease-out;
     min-width: 0;
     box-sizing: border-box;
@@ -3438,9 +4238,12 @@
     font: inherit;
     color: inherit;
   }
+<<<<<<< HEAD
   .tx-item-btn:hover {
     background: var(--color-background);
   }
+=======
+>>>>>>> origin/main
 
   .tx-row {
     display: flex;
@@ -3559,18 +4362,27 @@
     display: flex;
     align-items: center;
     justify-content: center;
+<<<<<<< HEAD
     background: var(--color-modalBackdrop);
+=======
+>>>>>>> origin/main
     animation: fadeIn 0.3s ease-out;
     z-index: 1000;
   }
 
   .modal-card {
+<<<<<<< HEAD
     background: var(--color-cardBackground);
     padding: 20px;
     border-radius: var(--radius-large, 14px);
     width: 320px;
     border: 1px solid var(--color-border);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+=======
+    padding: 20px;
+    border-radius: var(--radius-large, 14px);
+    width: 320px;
+>>>>>>> origin/main
     animation: slideInUp 0.4s ease-out;
   }
 
@@ -3668,9 +4480,17 @@
     letter-spacing: 0.3px;
   }
   .send-balance-value {
+<<<<<<< HEAD
     font-size: var(--font-size-base, 14px);
     font-weight: var(--font-weight-semibold, 600);
     color: var(--color-text);
+=======
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text);
+    letter-spacing: 0.02em;
+>>>>>>> origin/main
     font-variant-numeric: tabular-nums;
   }
   .send-balance-fiat {
@@ -3988,6 +4808,38 @@
 
   .qr-modal {
     max-width: 400px;
+<<<<<<< HEAD
+=======
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .qr-modal h3 {
+    text-align: center;
+    width: 100%;
+  }
+
+  .qr-modal .qr-container {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .qr-modal .modal-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Pairing UI later sets `.qr-code { display: flex }` for div wrappers; the send
+   * modal uses `<img class="qr-code">` — override with higher specificity so the
+   * image centers reliably. */
+  .qr-modal .qr-container img {
+    display: block;
+    margin-inline: auto;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-small, 8px);
+>>>>>>> origin/main
   }
 
   .qr-container {
@@ -4001,12 +4853,15 @@
     margin: 16px 0;
   }
 
+<<<<<<< HEAD
   .qr-code {
     max-width: 100%;
     height: auto;
     border-radius: var(--radius-small, 8px);
   }
 
+=======
+>>>>>>> origin/main
   .qr-instructions {
     text-align: center;
     color: var(--color-textSecondary);
@@ -4047,7 +4902,10 @@
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
     padding: 12px;
+<<<<<<< HEAD
     margin-top: 20px;
+=======
+>>>>>>> origin/main
     display: block !important; /* header is block; children are absolute */
   }
   .app-header-left {
@@ -4084,16 +4942,38 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
+<<<<<<< HEAD
     border: none;
     border-radius: 8px;
     background: var(--color-disabled);
+=======
+    border: 1px solid var(--glass-stroke, var(--color-border));
+    border-radius: 8px;
+    background: var(--glass-pane-bg, var(--color-disabled));
+>>>>>>> origin/main
     color: var(--color-text);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
+<<<<<<< HEAD
   }
   .header-price-btn:hover {
     background: var(--color-border);
+=======
+    backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 35%, transparent),
+      0 2px 10px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
+    transition:
+      background 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
+  .header-price-btn:hover {
+    background: var(--glass-pane-bg-solid, var(--color-border));
+    border-color: var(--color-primary);
+>>>>>>> origin/main
   }
   .header-price-icon {
     display: block;
@@ -4116,7 +4996,11 @@
     width: 100%;
     min-width: 0;
     margin-top: 48px;
+<<<<<<< HEAD
     padding-top: 12px;
+=======
+    padding-top: 8px;
+>>>>>>> origin/main
     min-height: 0;
     box-sizing: border-box;
   }
@@ -4206,6 +5090,7 @@
   .pairing-start {
     display: flex;
     flex-direction: column;
+<<<<<<< HEAD
     align-items: stretch;
     justify-content: flex-start;
     flex: 1;
@@ -4214,6 +5099,29 @@
     align-self: stretch;
     gap: 0;
     width: 100%;
+=======
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 24px 20px;
+    text-align: center;
+    align-self: center;
+    gap: 0;
+  }
+  .pairing-start .pairing-logo {
+    cursor: default;
+    margin-bottom: 8px;
+  }
+  .pairing-start .pairing-logo:hover {
+    transform: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+  .pairing-start .app-logo {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 0;
+    animation: none;
+>>>>>>> origin/main
   }
   .pairing-get-started {
     font-size: var(--font-size-xl, 22px);
@@ -4280,6 +5188,18 @@
   :global([data-theme="darkPolished"]) .app-logo {
     filter: brightness(0) invert(1);
   }
+<<<<<<< HEAD
+=======
+  :global([data-theme="darkPolished"]) .pairing-logo .app-logo {
+    filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+  }
+
+  .pairing-logo:hover .app-logo,
+  .pairing-logo:focus-visible .app-logo {
+    animation: bounce 600ms;
+  }
+
+>>>>>>> origin/main
   @keyframes bounce {
     0% {
       transform: translateY(0);
@@ -4318,6 +5238,29 @@
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
   }
 
+<<<<<<< HEAD
+=======
+  /* Only pulse when not hovered/focused so bounce can take precedence */
+  .pairing-logo:not(:hover):not(:focus) .app-logo {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+  }
+  .pairing-start .pairing-logo .app-logo {
+    animation: none;
+  }
+
+>>>>>>> origin/main
   .pairing-hint {
     font-size: 15px;
     font-weight: 600;
@@ -4903,7 +5846,11 @@
 
   :global(.popup-root .app-header) {
     position: fixed !important;
+<<<<<<< HEAD
     top: 32px !important;
+=======
+    top: 0 !important;
+>>>>>>> origin/main
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
@@ -4939,7 +5886,11 @@
     flex-direction: column;
     overflow: auto;
     margin-top: 48px !important;
+<<<<<<< HEAD
     padding-top: 16px !important;
+=======
+    padding-top: 8px !important;
+>>>>>>> origin/main
     min-height: 0;
     box-sizing: border-box;
   }
@@ -5138,6 +6089,7 @@
     padding: 8px 14px;
   }
 
+<<<<<<< HEAD
   /* Expanded / full-tab view: allow the app to fill the browser tab.
      Placed last so it wins over the fixed 380px popup rules above. */
   @media (min-width: 601px) {
@@ -5178,4 +6130,7 @@
       overflow: visible;
     }
   }
+=======
+  /* Expanded / full-tab (min-width: 601px): full-bleed background + centered column — see static/app.css */
+>>>>>>> origin/main
 </style>

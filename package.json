@@ -1,7 +1,11 @@
 {
 	"name": "boldchrome",
 	"private": true,
+<<<<<<< HEAD
 	"version": "1.0.4",
+=======
+	"version": "1.0.5",
+>>>>>>> origin/main
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",

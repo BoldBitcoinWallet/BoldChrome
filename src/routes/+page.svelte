@@ -5,6 +5,7 @@
   import SendTransaction from '$lib/components/SendTransaction.svelte';
   import { qr } from '$lib/services/qr';
   import logo from '$lib/assets/logo.png';
+  import { keyshareFingerprint as computeKeyshareFingerprint } from '$lib/services/keyshareFingerprint';
 
   let showPairingQR = false;
   let showScanner = false;
@@ -14,7 +15,25 @@
 
   // Reactive: Check if wallet is paired based on store
   $: isPaired = !!$walletStore.publicKey && $walletStore.publicKey.trim() !== '';
-  
+
+  $: keyshareFingerprintDisplay = computeKeyshareFingerprint($walletStore.publicKey);
+
+  let walletIdCopyHint = '';
+
+  async function copyWalletFingerprint() {
+    const id = keyshareFingerprintDisplay;
+    if (!id || id === 'N/A') return;
+    try {
+      await navigator.clipboard.writeText(id);
+      walletIdCopyHint = 'Copied!';
+    } catch {
+      walletIdCopyHint = 'Could not copy';
+    }
+    setTimeout(() => {
+      walletIdCopyHint = '';
+    }, 2000);
+  }
+
   // Debug logging
   $: console.log('[+page] Wallet state:', {
     publicKey: $walletStore.publicKey?.substring(0, 20) + '...',
@@ -186,6 +205,28 @@
           <div class="balance-usd">
             ${formatUSD($walletStore.usd)} USD
           </div>
+          <div
+            class="wallet-id-row"
+            title="Short id for this wallet keyshare (first 8 characters of SHA-256 of the public key)."
+          >
+            <span class="wallet-id-label">Fingerprint</span>
+            <span class="wallet-id-sep" aria-hidden="true">·</span>
+            <span class="wallet-id-value">{keyshareFingerprintDisplay}</span>
+            <button
+              type="button"
+              class="wallet-id-copy"
+              on:click={copyWalletFingerprint}
+              disabled={keyshareFingerprintDisplay === 'N/A'}
+              title="Copy Fingerprint"
+              aria-label="Copy Fingerprint"
+            >Copy</button>
+          </div>
+          {#if walletIdCopyHint}
+            <span
+              class="wallet-id-copy-hint"
+              class:error={walletIdCopyHint === 'Could not copy'}
+            >{walletIdCopyHint}</span>
+          {/if}
         </div>
 
         <div class="address-section">
@@ -503,6 +544,75 @@
     font-size: 20px;
     color: #a1a1aa;
     font-weight: 500;
+  }
+
+  .wallet-id-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin-top: 20px;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 10px;
+    font-size: 12px;
+    color: #71717a;
+  }
+
+  .wallet-id-label {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 11px;
+  }
+
+  .wallet-id-sep {
+    opacity: 0.45;
+    user-select: none;
+  }
+
+  .wallet-id-value {
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #111827;
+  }
+
+  .wallet-id-copy {
+    margin-left: 2px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #ffffff;
+    color: #71717a;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .wallet-id-copy:hover:not(:disabled) {
+    border-color: #f7931a;
+    color: #111827;
+  }
+
+  .wallet-id-copy:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .wallet-id-copy-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #22c55e;
+    font-weight: 600;
+  }
+
+  .wallet-id-copy-hint.error {
+    color: #ef4444;
   }
 
   .address-section {
