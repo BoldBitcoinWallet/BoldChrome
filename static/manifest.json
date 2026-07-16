@@ -10,7 +10,7 @@
     "type": "module"
   },
   "side_panel": {
-    "default_path": "index.html"
+    "default_path": "popup.html"
   },
   "action": {
     "default_icon": {
