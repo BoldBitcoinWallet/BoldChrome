@@ -68,6 +68,19 @@
   /** When set, run this action after user grants or skips camera permission (e.g. "pairing" = start Bind wallet flow). */
   let pendingActionAfterCamera: "pairing" | null = null;
 
+  // ---- Coin animation (Get Started / launch screen) ----
+  let coinShooting = false;
+  function triggerCoinAnimation() {
+    if (coinShooting) return;
+    coinShooting = true;
+  }
+  onMount(() => {
+    // First fire after a short delay so the coin appears lively on load
+    const initDelay = setTimeout(triggerCoinAnimation, 1200);
+    const interval = setInterval(triggerCoinAnimation, 4000);
+    return () => { clearTimeout(initDelay); clearInterval(interval); };
+  });
+
   $: showPinLoading = isPaired && !pinChecked;
   $: showLockScreen = isPaired && pinChecked && !!pinHash && !unlocked;
   $: showSetPinScreen =
@@ -1779,24 +1792,74 @@
         <div class="pairing-body" class:steps-active={pairingStep > 0}>
           {#if pairingStep === 0}
             <div class="pairing-start">
-              <div class="pairing-logo" aria-hidden="true">
-                <img
-                  src={logo}
-                  alt=""
-                  class="app-logo"
-                  width="80"
-                  height="80"
-                />
+              <div class="pairing-start-content">
+                <div class="pairing-logo" aria-hidden="true">
+                  <img
+                    src={logo}
+                    alt=""
+                    class="app-logo"
+                    width="80"
+                    height="80"
+                  />
+                </div>
+                <h1 class="pairing-get-started">Get Started</h1>
+                <p class="pairing-cta">Connect in 2 steps with your Bold app.</p>
+                <button
+                  type="button"
+                  class="btn-primary pairing-bind-btn"
+                  on:click={handlePairDevice}
+                  on:mouseenter={triggerCoinAnimation}
+                >
+                  Bind wallet
+                </button>
               </div>
-              <h1 class="pairing-get-started">Get Started</h1>
-              <p class="pairing-cta">Connect in 2 steps with your Bold app.</p>
-              <button
-                type="button"
-                class="btn-primary pairing-bind-btn"
-                on:click={handlePairDevice}
-              >
-                Bind wallet
-              </button>
+              <div class="animation-container" aria-hidden="true">
+                <div class="coin-track">
+                  <div
+                    class="btc-coin"
+                    class:coin-shooting={coinShooting}
+                    on:animationend={() => { coinShooting = false; }}
+                  >
+                    <svg
+                      viewBox="0 0 60 60"
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="coin-svg"
+                    >
+                      <defs>
+                        <radialGradient id="coin-gFace" cx="38%" cy="32%" r="62%">
+                          <stop offset="0%"   stop-color="#FFF0A0"/>
+                          <stop offset="35%"  stop-color="#F5C330"/>
+                          <stop offset="70%"  stop-color="#D4900F"/>
+                          <stop offset="100%" stop-color="#A46210"/>
+                        </radialGradient>
+                        <radialGradient id="coin-gEdge" cx="50%" cy="90%" r="70%">
+                          <stop offset="0%"   stop-color="#B07010"/>
+                          <stop offset="100%" stop-color="#6B3700"/>
+                        </radialGradient>
+                      </defs>
+                      <!-- 3D bottom edge shadow -->
+                      <ellipse cx="30" cy="55" rx="26" ry="5" fill="url(#coin-gEdge)"/>
+                      <!-- Left-side shading arc -->
+                      <path d="M4 30 Q3 50 30 55 Q5 50 4 30Z" fill="rgba(0,0,0,0.15)"/>
+                      <!-- Coin face -->
+                      <circle cx="30" cy="27" r="26" fill="url(#coin-gFace)"/>
+                      <!-- Inner ring detail -->
+                      <circle cx="30" cy="27" r="21" fill="none" stroke="rgba(160,90,10,0.35)" stroke-width="1.2"/>
+                      <!-- Bitcoin symbol -->
+                      <text
+                        x="30" y="36"
+                        text-anchor="middle"
+                        font-size="25"
+                        font-weight="900"
+                        fill="rgba(100,50,5,0.85)"
+                        font-family="Inter,Arial,sans-serif"
+                      >&#x20BF;</text>
+                      <!-- Face highlight -->
+                      <ellipse cx="20" cy="17" rx="9" ry="5" fill="rgba(255,255,255,0.28)" transform="rotate(-22 20 17)"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
           {/if}
 
@@ -4224,12 +4287,23 @@
   .pairing-start {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex: 1;
+    padding: 0;
+    text-align: center;
+    align-self: stretch;
+    gap: 0;
+    width: 100%;
+  }
+  .pairing-start-content {
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    flex: 1;
-    padding: 24px 20px;
-    text-align: center;
-    align-self: center;
+    padding: 28px 20px 20px;
+    width: 100%;
+    box-sizing: border-box;
     gap: 0;
   }
   .pairing-start .pairing-logo {
