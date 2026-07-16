@@ -1,42 +1,29 @@
 <script lang="ts">
-  /**
-   * GetStartedView — Bold Bitcoin Wallet onboarding screen.
-   *
-   * Animation sequence (all GPU-accelerated via CSS transforms):
-   *   1. REST   — Mario Question Block sits at bottom centre.
-   *   2. BREAK  — Block explodes into 8 particles (CSS keyframes, ~300 ms).
-   *   3. RELEASE— Gold Bitcoin coin pops upward from the block's centre.
-   *   4. JOURNEY— Coin travels in a fast arc toward the logo.
-   *   5. COLLECT— Coin fades into the logo glow; logo executes a springy
-   *                squash-and-stretch "collection" pulse (Svelte spring store).
-   *
-   * The full cycle repeats every 5 seconds.
-   */
-
   import { onMount, onDestroy } from 'svelte';
   import { spring } from 'svelte/motion';
   import logo from '$lib/assets/bold-icon.png';
 
   // ── Props ──────────────────────────────────────────────────────────────────
-  /** Called when the user clicks "Bind wallet". */
   export let onBind: () => void = () => {};
 
   // ── Animation state machine ────────────────────────────────────────────────
   type Stage =
-    | 'rest'       // block visible, coin hidden
-    | 'breaking'   // block particles flying
-    | 'releasing'  // coin shooting up from block
-    | 'journeying' // coin arcing toward logo
-    | 'collecting' // coin merging into logo / logo pulse
-    | 'resetting'; // everything fades back to rest
+    | 'rest'
+    | 'breaking'
+    | 'releasing'
+    | 'journeying'
+    | 'collecting'
+    | 'done';
 
   let stage: Stage = 'rest';
+  /** Ensures the sequence fires at most once per component lifetime. */
+  let animationPlayed = false;
 
   // ── Logo spring (squash-and-stretch) ───────────────────────────────────────
   const logoScale = spring({ x: 1, y: 1 }, { stiffness: 0.35, damping: 0.45 });
 
-  // ── Glow pulse (gentle aura behind logo) ───────────────────────────────────
-  let glowPulsing = false; // drives CSS class
+  // ── Glow pulse trigger ─────────────────────────────────────────────────────
+  let glowPulsing = false;
 
   // ── Timers (collected for cleanup) ─────────────────────────────────────────
   const timers: ReturnType<typeof setTimeout>[] = [];
@@ -44,66 +31,50 @@
     timers.push(setTimeout(fn, ms));
   }
 
-  // ── Main sequence ──────────────────────────────────────────────────────────
+  // ── Main sequence — plays exactly once ────────────────────────────────────
   function runSequence() {
-    stage = 'breaking';                         // Step 1: explode block
+    if (animationPlayed) return;
+    animationPlayed = true;
 
-    after(300, () => {
-      stage = 'releasing';                      // Step 2: coin pops up
-    });
+    stage = 'breaking';
 
-    after(500, () => {
-      stage = 'journeying';                     // Step 3: coin arcs to logo
-    });
+    after(300, () => { stage = 'releasing'; });
+    after(500, () => { stage = 'journeying'; });
 
     after(950, () => {
-      stage = 'collecting';                     // Step 4a: coin reaches logo
+      stage = 'collecting';
       glowPulsing = true;
-      // Squash then stretch then settle
       logoScale.set({ x: 1.22, y: 0.78 });
       after(110, () => logoScale.set({ x: 0.88, y: 1.18 }));
       after(220, () => logoScale.set({ x: 1.08, y: 0.94 }));
       after(330, () => logoScale.set({ x: 1, y: 1 }));
     });
 
-    after(1400, () => {
+    after(1430, () => {
       glowPulsing = false;
-      stage = 'resetting';                      // fade everything out
-    });
-
-    after(1900, () => {
-      stage = 'rest';                           // ready for next cycle
+      stage = 'done'; // animation complete — nothing more to render
     });
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
-  let intervalId: ReturnType<typeof setInterval>;
-
   onMount(() => {
-    // First trigger after a short pause so the user sees the rest state briefly.
-    after(1000, runSequence);
-    intervalId = setInterval(runSequence, 5000);
+    after(800, runSequence);
   });
 
   onDestroy(() => {
-    clearInterval(intervalId);
     timers.forEach(clearTimeout);
   });
 
   // ── Derived helpers ────────────────────────────────────────────────────────
-  $: blockVisible   = stage === 'rest' || stage === 'resetting';
+  $: blockVisible    = stage === 'rest';
   $: particlesActive = stage === 'breaking';
-  $: coinVisible    = stage === 'releasing' || stage === 'journeying' || stage === 'collecting';
-  $: coinPhase      = stage; // used as CSS class modifier
+  $: coinVisible     = stage === 'releasing' || stage === 'journeying' || stage === 'collecting';
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
      TEMPLATE
      ═══════════════════════════════════════════════════════════════════════════ -->
 <div class="gs-root" aria-label="Get Started onboarding">
-
-  <!-- ── Top gradient overlay (fixed, behind everything) ─────────────────── -->
-  <div class="gs-gradient" aria-hidden="true"></div>
 
   <!-- ── Upper content: logo + text + button ────────────────────────────────── -->
   <div class="gs-content">
@@ -132,7 +103,6 @@
       type="button"
       class="gs-bind-btn"
       on:click={onBind}
-      on:mouseenter={runSequence}
     >
       Bind wallet
     </button>
@@ -141,9 +111,9 @@
   <!-- ── Bottom animation stage ────────────────────────────────────────────── -->
   <div class="gs-stage" aria-hidden="true">
 
-    <!-- Question Mark Block (rest / resetting) -->
+    <!-- Question Mark Block (rest only) -->
     {#if blockVisible}
-      <div class="gs-block" class:gs-block--fading={stage === 'resetting'}>
+      <div class="gs-block">
         <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="gs-block-svg">
           <defs>
             <linearGradient id="blk-face" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -238,43 +208,18 @@
      STYLES  — all GPU-accelerated; no layout-triggering properties animated
      ═══════════════════════════════════════════════════════════════════════════ -->
 <style>
-  /* ── Root shell ──────────────────────────────────────────────────────────── */
+  /* ── Root: fixed overlay covering full viewport — pure black + teal glow ── */
   .gs-root {
-    position: relative;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 100%;
-    flex: 1;
     overflow: hidden;
-    background: transparent; /* parent popup-root provides the dark background */
-  }
-
-  /* ── Top gradient (fixed behind content, fades into dark bg) ────────────── */
-  .gs-gradient {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
     background:
-      /* Strong teal bloom — top-left */
-      radial-gradient(
-        ellipse 150% 65% at 0% 0%,
-        rgba(0, 210, 184, 0.28) 0%,
-        transparent 60%
-      ),
-      /* Gold arc — top-right */
-      radial-gradient(
-        ellipse 120% 50% at 100% 0%,
-        rgba(230, 196, 53, 0.20) 0%,
-        transparent 58%
-      ),
-      /* Deep centre-top halo */
-      radial-gradient(
-        ellipse 100% 35% at 50% 0%,
-        rgba(0, 180, 160, 0.10) 0%,
-        transparent 50%
-      );
+      radial-gradient(ellipse 90% 45% at 50% 0%, rgba(0, 160, 140, 0.18) 0%, transparent 62%),
+      #000000;
   }
 
   /* ── Upper content block ─────────────────────────────────────────────────── */
@@ -307,11 +252,11 @@
     border-radius: 50%;
     background: radial-gradient(
       ellipse 80% 80% at 50% 50%,
-      rgba(230, 196, 53, 0.45) 0%,
-      rgba(0, 210, 184, 0.22) 45%,
+      rgba(230, 196, 53, 0.35) 0%,
+      rgba(0, 210, 184, 0.16) 45%,
       transparent 72%
     );
-    animation: glowBreath 3s ease-in-out infinite;
+    opacity: 0.7;
     transform-origin: center;
     will-change: transform, opacity;
   }
@@ -319,10 +264,6 @@
     animation: glowCollect 0.45s ease-out forwards;
   }
 
-  @keyframes glowBreath {
-    0%, 100% { transform: scale(1);    opacity: 0.7; }
-    50%       { transform: scale(1.18); opacity: 1;   }
-  }
   @keyframes glowCollect {
     0%   { transform: scale(1);   opacity: 0.7; }
     40%  { transform: scale(1.6); opacity: 1;   }
@@ -416,10 +357,6 @@
     width: 64px;
     height: 64px;
     will-change: transform, opacity;
-    animation: blockIdle 2.4s ease-in-out infinite;
-  }
-  .gs-block--fading {
-    animation: blockFade 0.5s ease forwards;
   }
   .gs-block-svg {
     width: 100%;
@@ -428,16 +365,6 @@
     /* 3-D depth via drop shadow */
     filter: drop-shadow(0 6px 14px rgba(0,0,0,0.7))
             drop-shadow(0 2px 4px rgba(230,196,53,0.2));
-  }
-
-  @keyframes blockIdle {
-    0%, 100% { transform: translateX(-50%) translateY(0);    }
-    50%       { transform: translateX(-50%) translateY(-5px); }
-  }
-  @keyframes blockFade {
-    0%   { opacity: 1; transform: translateX(-50%) scale(1);    }
-    40%  { opacity: 0; transform: translateX(-50%) scale(1.15); }
-    100% { opacity: 0; transform: translateX(-50%) scale(0.8);  }
   }
 
   /* ════════════════════════════════════════════════════════════════════════════
