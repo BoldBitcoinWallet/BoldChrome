@@ -12,15 +12,14 @@
     | 'breaking'
     | 'releasing'
     | 'journeying'
-    | 'collecting'
-    | 'done';
+    | 'collecting';
 
   let stage: Stage = 'rest';
-  /** Ensures the sequence fires at most once per component lifetime. */
-  let animationPlayed = false;
+  /** Prevents re-entry while an animation is already in progress. */
+  let isAnimating = false;
 
-  // ── Logo spring (squash-and-stretch) ───────────────────────────────────────
-  const logoScale = spring({ x: 1, y: 1 }, { stiffness: 0.35, damping: 0.45 });
+  // ── Logo spring (snappy squash-and-stretch) ────────────────────────────────
+  const logoScale = spring({ x: 1, y: 1 }, { stiffness: 0.8, damping: 0.7 });
 
   // ── Glow pulse trigger ─────────────────────────────────────────────────────
   let glowPulsing = false;
@@ -31,10 +30,11 @@
     timers.push(setTimeout(fn, ms));
   }
 
-  // ── Main sequence — plays exactly once ────────────────────────────────────
+  // ── Main sequence — replayable; block click re-triggers each time ─────────
   function runSequence() {
-    if (animationPlayed) return;
-    animationPlayed = true;
+    if (isAnimating) return;
+    isAnimating = true;
+    timers.length = 0; // clear stale refs from previous run
 
     stage = 'breaking';
 
@@ -52,7 +52,8 @@
 
     after(1430, () => {
       glowPulsing = false;
-      stage = 'done'; // animation complete — nothing more to render
+      isAnimating = false;
+      stage = 'rest'; // block reappears — ready for next click
     });
   }
 
@@ -109,11 +110,18 @@
   </div>
 
   <!-- ── Bottom animation stage ────────────────────────────────────────────── -->
-  <div class="gs-stage" aria-hidden="true">
+  <div class="gs-stage">
 
-    <!-- Question Mark Block (rest only) -->
+    <!-- Question Mark Block — click to replay animation -->
     {#if blockVisible}
-      <div class="gs-block">
+      <div
+        class="gs-block"
+        role="button"
+        tabindex="0"
+        aria-label="Tap to play coin animation"
+        on:click={runSequence}
+        on:keydown={(e) => e.key === 'Enter' && runSequence()}
+      >
         <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="gs-block-svg">
           <defs>
             <linearGradient id="blk-face" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -357,6 +365,15 @@
     width: 64px;
     height: 64px;
     will-change: transform, opacity;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+    outline: none;
+  }
+  .gs-block:hover {
+    transform: translateX(-50%) translateY(-3px) scale(1.06);
+  }
+  .gs-block:active {
+    transform: translateX(-50%) translateY(1px) scale(0.94);
   }
   .gs-block-svg {
     width: 100%;
@@ -404,45 +421,37 @@
   .gs-particle--6 { animation: particle6 0.34s cubic-bezier(0.1, 0.6, 0.4, 1) forwards; }
   .gs-particle--7 { animation: particle7 0.37s cubic-bezier(0.1, 0.6, 0.4, 1) forwards; background:#444; }
 
-  /* Up */
   @keyframes particle0 {
-    0%   { transform: translate(0,0)         rotate(0deg);   opacity:1; }
-    100% { transform: translate(-4px,-68px)  rotate(-180deg); opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(-4px,-68px,0)    rotate(-180deg); opacity: 0; }
   }
-  /* Up-right */
   @keyframes particle1 {
-    0%   { transform: translate(0,0)         rotate(0deg);  opacity:1; }
-    100% { transform: translate(52px,-52px)  rotate(120deg); opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(52px,-52px,0)    rotate(120deg);  opacity: 0; }
   }
-  /* Right */
   @keyframes particle2 {
-    0%   { transform: translate(0,0)         rotate(0deg);  opacity:1; }
-    100% { transform: translate(72px,-8px)   rotate(90deg);  opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(72px,-8px,0)     rotate(90deg);   opacity: 0; }
   }
-  /* Down-right */
   @keyframes particle3 {
-    0%   { transform: translate(0,0)         rotate(0deg);  opacity:1; }
-    100% { transform: translate(48px,44px)   rotate(200deg); opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(48px,44px,0)     rotate(200deg);  opacity: 0; }
   }
-  /* Down */
   @keyframes particle4 {
-    0%   { transform: translate(0,0)         rotate(0deg);  opacity:1; }
-    100% { transform: translate(2px,58px)    rotate(-90deg); opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(2px,58px,0)      rotate(-90deg);  opacity: 0; }
   }
-  /* Down-left */
   @keyframes particle5 {
-    0%   { transform: translate(0,0)         rotate(0deg);  opacity:1; }
-    100% { transform: translate(-50px,42px)  rotate(240deg); opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(-50px,42px,0)    rotate(240deg);  opacity: 0; }
   }
-  /* Left */
   @keyframes particle6 {
-    0%   { transform: translate(0,0)         rotate(0deg);  opacity:1; }
-    100% { transform: translate(-70px,-6px)  rotate(-120deg); opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(-70px,-6px,0)    rotate(-120deg); opacity: 0; }
   }
-  /* Up-left */
   @keyframes particle7 {
-    0%   { transform: translate(0,0)         rotate(0deg);  opacity:1; }
-    100% { transform: translate(-50px,-54px) rotate(160deg); opacity:0; }
+    0%   { transform: translate3d(0,0,0)           rotate(0deg);    opacity: 1; }
+    100% { transform: translate3d(-50px,-54px,0)   rotate(160deg);  opacity: 0; }
   }
 
   /* ════════════════════════════════════════════════════════════════════════════
@@ -479,33 +488,31 @@
     animation: coinRelease 0.22s cubic-bezier(0.2, 1.5, 0.4, 1) forwards;
   }
   @keyframes coinRelease {
-    0%   { transform: translateY(0)     rotateY(0deg)   scale(0.7); opacity: 0; }
-    30%  { transform: translateY(-28px) rotateY(90deg)  scale(1.05); opacity: 1; }
-    100% { transform: translateY(-80px) rotateY(180deg) scale(1);    opacity: 1; }
+    0%   { transform: translate3d(0,0,0)     rotateY(0deg)   scale(0.7);  opacity: 0; }
+    30%  { transform: translate3d(0,-28px,0) rotateY(90deg)  scale(1.05); opacity: 1; }
+    100% { transform: translate3d(0,-80px,0) rotateY(180deg) scale(1);    opacity: 1; }
   }
 
   /* ── Phase 2: arc up toward the logo (~460px from bottom of stage) ───────── */
   .gs-coin--journeying {
     animation: coinJourney 0.46s cubic-bezier(0.3, 0, 0.2, 1) forwards;
-    /* Start at position left by coinRelease */
-    transform: translateY(-80px) rotateY(180deg);
+    transform: translate3d(0,-80px,0) rotateY(180deg);
   }
   @keyframes coinJourney {
-    /* slight rightward arc then straight up, spinning fast */
-    0%   { transform: translateY(-80px)  translateX(0px)   rotateY(180deg)  scale(1);    opacity: 1; }
-    35%  { transform: translateY(-220px) translateX(12px)  rotateY(540deg)  scale(0.95); opacity: 1; }
-    75%  { transform: translateY(-370px) translateX(4px)   rotateY(900deg)  scale(0.85); opacity: 1; }
-    100% { transform: translateY(-450px) translateX(0px)   rotateY(1080deg) scale(0.7);  opacity: 1; }
+    0%   { transform: translate3d(0,-80px,0)     rotateY(180deg)  scale(1);    opacity: 1; }
+    35%  { transform: translate3d(12px,-220px,0) rotateY(540deg)  scale(0.95); opacity: 1; }
+    75%  { transform: translate3d(4px,-370px,0)  rotateY(900deg)  scale(0.85); opacity: 1; }
+    100% { transform: translate3d(0,-450px,0)    rotateY(1080deg) scale(0.7);  opacity: 1; }
   }
 
   /* ── Phase 3: coin collides with logo, scale-fades into glow ────────────── */
   .gs-coin--collecting {
     animation: coinCollect 0.48s cubic-bezier(0.4, 0, 0.6, 1) forwards;
-    transform: translateY(-450px) rotateY(1080deg) scale(0.7);
+    transform: translate3d(0,-450px,0) rotateY(1080deg) scale(0.7);
   }
   @keyframes coinCollect {
-    0%   { transform: translateY(-450px) scale(0.7) rotateY(1080deg); opacity: 1;   }
-    50%  { transform: translateY(-470px) scale(0.3) rotateY(1080deg); opacity: 0.7; }
-    100% { transform: translateY(-480px) scale(0)   rotateY(1080deg); opacity: 0;   }
+    0%   { transform: translate3d(0,-450px,0) scale(0.7) rotateY(1080deg); opacity: 1;   }
+    50%  { transform: translate3d(0,-470px,0) scale(0.3) rotateY(1080deg); opacity: 0.7; }
+    100% { transform: translate3d(0,-480px,0) scale(0)   rotateY(1080deg); opacity: 0;   }
   }
 </style>
