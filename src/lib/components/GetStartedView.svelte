@@ -122,8 +122,7 @@
         on:click={runSequence}
         on:keydown={(e) => e.key === 'Enter' && runSequence()}
       >
-        <!-- 3-D depth faces (SVG layer — no text, no centering concerns) -->
-        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="gs-block-depth" aria-hidden="true">
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="gs-block-svg">
           <defs>
             <linearGradient id="blk-face" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%"   stop-color="#3a3a3a"/>
@@ -133,6 +132,16 @@
               <stop offset="0%"   stop-color="#505050"/>
               <stop offset="100%" stop-color="#3a3a3a"/>
             </linearGradient>
+            <!-- Glow behind the "?" (SVG filter replaces CSS text-shadow) -->
+            <filter id="qmark-glow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur"/>
+              <feFlood flood-color="#E6C435" flood-opacity="0.55" result="color"/>
+              <feComposite in="color" in2="blur" operator="in" result="glow"/>
+              <feMerge>
+                <feMergeNode in="glow"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
           </defs>
           <!-- 3-D left face -->
           <polygon points="0,6 6,0 6,58 0,64" fill="#1a1a1a"/>
@@ -147,12 +156,20 @@
                 stroke="#555" stroke-width="1"/>
           <!-- Top highlight line -->
           <rect x="10" y="9" width="44" height="3" rx="1" fill="rgba(255,255,255,0.08)"/>
+          <!-- Gold '?' centred on the front face.
+               Front face rect: x=6 y=6 w=58 h=58  →  centre = (6+29, 6+29) = (35,35)
+               dominant-baseline="central" aligns the mid-point of the em-box to y=35
+               (not the alphabetic baseline), which is the correct SVG centering mode. -->
+          <text
+            x="35" y="35"
+            text-anchor="middle"
+            dominant-baseline="central"
+            font-size="30"
+            font-weight="900"
+            fill="#E6C435"
+            font-family="Inter,Arial,sans-serif"
+            filter="url(#qmark-glow)">?</text>
         </svg>
-        <!-- Front face overlay: bounded to the SVG front rect (x=6,y=6, 58×58 px) -->
-        <!-- Flexbox centering here is independent of the 3-D depth edges       -->
-        <div class="gs-block-front">
-          <span class="gs-block-qmark">?</span>
-        </div>
       </div>
     {/if}
 
@@ -377,42 +394,12 @@
   .gs-block:active {
     transform: translateX(-50%) translateY(1px) scale(0.94);
   }
-  .gs-block-depth {
-    position: absolute;
-    inset: 0;
+  .gs-block-svg {
     width: 100%;
     height: 100%;
     display: block;
     filter: drop-shadow(0 6px 14px rgba(0,0,0,0.7))
             drop-shadow(0 2px 4px rgba(230,196,53,0.2));
-  }
-
-  /* Overlay precisely covers the SVG front face rect: x=6 y=6 w=58 h=58 */
-  /* (The .gs-block is 64×64px matching the SVG viewBox 0 0 64 64)          */
-  .gs-block-front {
-    position: absolute;
-    left: 6px;
-    top: 6px;
-    width: 58px;
-    height: 58px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-  }
-
-  .gs-block-qmark {
-    display: block;
-    font-size: 32px;
-    font-weight: 900;
-    line-height: 1;
-    color: #E6C435;
-    font-family: Inter, Arial, sans-serif;
-    text-shadow: 0 2px 8px rgba(230, 196, 53, 0.6);
-    /* Sans-serif glyphs carry ~8% baseline padding below the cap-height;
-       this nudge compensates so the "?" sits visually centred in the face. */
-    transform: translateY(-4%);
-    user-select: none;
   }
 
   /* ════════════════════════════════════════════════════════════════════════════
