@@ -4215,30 +4215,6 @@
     gap: 0;
     width: 100%;
   }
-  .pairing-start-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 28px 20px 20px;
-    width: 100%;
-    box-sizing: border-box;
-    gap: 0;
-  }
-  .pairing-start .pairing-logo {
-    cursor: default;
-    margin-bottom: 8px;
-  }
-  .pairing-start .pairing-logo:hover {
-    transform: none;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-  }
-  .pairing-start .app-logo {
-    width: 80px;
-    height: 80px;
-    margin-bottom: 0;
-    animation: none;
-  }
   .pairing-get-started {
     font-size: var(--font-size-xl, 22px);
     font-weight: 700;
@@ -4304,15 +4280,6 @@
   :global([data-theme="darkPolished"]) .app-logo {
     filter: brightness(0) invert(1);
   }
-  :global([data-theme="darkPolished"]) .pairing-logo .app-logo {
-    filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
-  }
-
-  .pairing-logo:hover .app-logo,
-  .pairing-logo:focus-visible .app-logo {
-    animation: bounce 600ms;
-  }
-
   @keyframes bounce {
     0% {
       transform: translateY(0);
@@ -4349,26 +4316,6 @@
     transform-origin: center;
     will-change: transform;
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
-  }
-
-  /* Only pulse when not hovered/focused so bounce can take precedence */
-  .pairing-logo:not(:hover):not(:focus) .app-logo {
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0.8;
-      transform: scale(1.05);
-    }
-  }
-  .pairing-start .pairing-logo .app-logo {
-    animation: none;
   }
 
   .pairing-hint {
