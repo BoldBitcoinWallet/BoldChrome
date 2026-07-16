@@ -13,8 +13,10 @@ body {
 body {
   margin: 0;
   padding: 0;
-  width: 380px;
-  min-height: 580px;
+  min-width: 320px;
+  max-width: 480px;
+  width: 100%;
+  min-height: 100vh;
   background: var(--color-background);
   color: var(--color-text);
   overflow-x: hidden;
@@ -32,8 +34,10 @@ body {
 }
 
 body[data-sveltekit-preload-data="hover"] {
-  width: 380px;
-  min-height: 580px;
+  min-width: 320px;
+  max-width: 480px;
+  width: 100%;
+  min-height: 100vh;
   height: 100%;
   background: var(--color-background);
   display: flex;
