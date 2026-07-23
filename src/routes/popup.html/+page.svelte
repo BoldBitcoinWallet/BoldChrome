@@ -51,6 +51,7 @@
   } from "$lib/services/pin";
   import lockerIcon from "$lib/assets/locker-icon.png";
   import { keyshareFingerprint as computeKeyshareFingerprint } from "$lib/services/keyshareFingerprint";
+  import GetStartedView from "$lib/components/GetStartedView.svelte";
 
   function getExtensionVersionLabel(): string {
     try {
@@ -1717,6 +1718,7 @@
         >✕</button>
       </div>
 
+      <div class="wallet-settings-body">
       <section class="wallet-settings-block">
         <h3 class="wallet-settings-label">Fingerprint</h3>
         <p class="wallet-settings-hint">
@@ -1835,6 +1837,7 @@
           Unpair wallet
         </button>
       </section>
+      </div>
     </div>
     </div>
   {/if}
@@ -2015,26 +2018,7 @@
       <div class="pairing-container" class:steps-active={pairingStep > 0}>
         <div class="pairing-body" class:steps-active={pairingStep > 0}>
           {#if pairingStep === 0}
-            <div class="pairing-start">
-              <div class="pairing-logo" aria-hidden="true">
-                <img
-                  src={logo}
-                  alt=""
-                  class="app-logo"
-                  width="80"
-                  height="80"
-                />
-              </div>
-              <h1 class="pairing-get-started">Get Started</h1>
-              <p class="pairing-cta">Connect in 2 steps with your Bold app.</p>
-              <button
-                type="button"
-                class="btn-primary pairing-bind-btn"
-                on:click={handlePairDevice}
-              >
-                Bind wallet
-              </button>
-            </div>
+            <GetStartedView onBind={handlePairDevice} />
           {/if}
 
           {#if pairingStep > 0}
@@ -2720,77 +2704,78 @@
               </div>
             </div>
           {/if}
-          <footer class="footer">
-            {#if showMainApp}
-              <span class="footer-left">
-                <span class="footer-mempool-label">Provider:</span>
-                <span class="footer-mempool-value">{mempoolDisplayName}</span>
-              </span>
-              <span class="footer-right">
+        </div>
+
+        <footer class="footer">
+          {#if showMainApp}
+            <span class="footer-left">
+              <span class="footer-mempool-label">Provider:</span>
+              <span class="footer-mempool-value">{mempoolDisplayName}</span>
+            </span>
+            <span class="footer-right">
+              <button
+                type="button"
+                class="footer-btn footer-change-btn"
+                on:click={handleMempoolChange}
+                title="Change mempool provider">Change</button
+              >
+            </span>
+          {/if}
+        </footer>
+
+        {#if showMempoolModal}
+          <div
+            class="modal mempool-modal"
+            role="dialog"
+            aria-labelledby="mempool-modal-title"
+            aria-modal="true"
+          >
+            <div class="modal-card mempool-modal-card">
+              <h3 id="mempool-modal-title" class="mempool-modal-title">
+                Change mempool provider
+              </h3>
+              <label for="mempool-modal-url" class="mempool-label"
+                >Provider URL</label
+              >
+              <input
+                id="mempool-modal-url"
+                type="url"
+                autocomplete="off"
+                placeholder="https://mempool.space/api"
+                bind:value={mempoolModalInputValue}
+                class="mempool-modal-input"
+                aria-label="Mempool API URL"
+              />
+              {#if mempoolError}
+                <p class="pin-error" role="alert">{mempoolError}</p>
+              {/if}
+              <div class="mempool-modal-actions">
                 <button
                   type="button"
-                  class="footer-btn footer-change-btn"
-                  on:click={handleMempoolChange}
-                  title="Change mempool provider">Change</button
+                  class="btn-secondary"
+                  on:click={() => {
+                    showMempoolModal = false;
+                    mempoolError = "";
+                  }}>Cancel</button
                 >
-              </span>
-            {/if}
-          </footer>
-
-          {#if showMempoolModal}
-            <div
-              class="modal mempool-modal"
-              role="dialog"
-              aria-labelledby="mempool-modal-title"
-              aria-modal="true"
-            >
-              <div class="modal-card mempool-modal-card">
-                <h3 id="mempool-modal-title" class="mempool-modal-title">
-                  Change mempool provider
-                </h3>
-                <label for="mempool-modal-url" class="mempool-label"
-                  >Provider URL</label
+                <button
+                  type="button"
+                  class="btn-secondary mempool-modal-reset-btn"
+                  on:click={handleMempoolResetInput}
+                  title="Fill with default URL">Reset</button
                 >
-                <input
-                  id="mempool-modal-url"
-                  type="url"
-                  autocomplete="off"
-                  placeholder="https://mempool.space/api"
-                  bind:value={mempoolModalInputValue}
-                  class="mempool-modal-input"
-                  aria-label="Mempool API URL"
-                />
-                {#if mempoolError}
-                  <p class="pin-error" role="alert">{mempoolError}</p>
-                {/if}
-                <div class="mempool-modal-actions">
-                  <button
-                    type="button"
-                    class="btn-secondary"
-                    on:click={() => {
-                      showMempoolModal = false;
-                      mempoolError = "";
-                    }}>Cancel</button
-                  >
-                  <button
-                    type="button"
-                    class="btn-secondary mempool-modal-reset-btn"
-                    on:click={handleMempoolResetInput}
-                    title="Fill with default URL">Reset</button
-                  >
-                  <button
-                    type="button"
-                    class="btn-primary"
-                    on:click={() => handleMempoolSave(mempoolModalInputValue)}
-                    disabled={mempoolSaving}
-                  >
-                    {mempoolSaving ? "Checking…" : "Save"}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  on:click={() => handleMempoolSave(mempoolModalInputValue)}
+                  disabled={mempoolSaving}
+                >
+                  {mempoolSaving ? "Checking…" : "Save"}
+                </button>
               </div>
             </div>
-          {/if}
-        </div>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>
@@ -2859,22 +2844,22 @@
   :global(body) {
     margin: 0;
     padding: 0;
+    width: 100%;
     height: 100%;
+    min-height: 100%;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
       Ubuntu, Cantarell, sans-serif;
-    width: 380px;
-    /* Popup shell height: Chrome caps ~600px — app.css @media (max-width: 600px) pins to viewport */
-    min-height: 600px;
+    /* Side panel fills the browser panel — do not pin to legacy ~600px popup height */
     background: var(--color-background);
     overflow-x: hidden;
     color: var(--color-text);
   }
 
   :global(html) {
-    width: 380px;
-    min-height: 600px;
+    width: 100%;
     height: 100%;
+    min-height: 100%;
     overflow: hidden;
     background: var(--color-background);
   }
@@ -2944,10 +2929,11 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: 380px;
+    max-width: 100%;
     min-width: 0;
     min-height: 0;
-    flex: 1;
+    flex: 1 1 auto;
+    align-self: stretch;
     color: var(--color-text);
     background: transparent;
     overflow: hidden;
@@ -2984,20 +2970,19 @@
     min-width: 0;
   }
 
-  /* Wallet details: full-viewport backdrop + centered card (same pattern as mempool provider modal via .modal + .mempool-modal) */
-
+  /* Wallet details: fit side-panel viewport; header fixed, body scrolls */
   .wallet-settings-sheet.modal-card {
-    width: min(356px, 92vw);
-    max-width: 356px;
-    max-height: min(560px, 85dvh);
+    width: min(400px, calc(100vw - 32px));
+    max-width: 100%;
+    max-height: calc(100dvh - 32px);
+    height: auto;
     margin: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding: 0 0 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
     box-sizing: border-box;
   }
-
-
 
   .wallet-settings-head {
     display: flex;
@@ -3006,13 +2991,21 @@
     gap: 8px;
     padding: 12px 12px 8px;
     border-bottom: 1px solid var(--glass-stroke, var(--color-border));
-    position: sticky;
-    top: 0;
+    flex-shrink: 0;
     background: var(--glass-pane-bg, var(--color-cardBackground));
     backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-sat, 160%));
     -webkit-backdrop-filter: blur(var(--glass-blur, 20px))
       saturate(var(--glass-sat, 160%));
     z-index: 1;
+  }
+
+  .wallet-settings-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .wallet-settings-title {
@@ -4033,7 +4026,9 @@
     background: var(--color-background);
     border-top: 1px solid var(--color-border);
     flex-shrink: 0;
-    bottom: 0;
+    margin-top: auto;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .modal {
@@ -5445,7 +5440,7 @@
     flex-direction: column;
     align-items: stretch;
     width: 100%;
-    max-width: 380px;
+    max-width: 100%;
     min-height: 100%;
     height: 100%;
     flex: 1;
@@ -5462,7 +5457,7 @@
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
-    max-width: 380px !important;
+    max-width: 100% !important;
     z-index: 20;
     display: block !important;
   }
