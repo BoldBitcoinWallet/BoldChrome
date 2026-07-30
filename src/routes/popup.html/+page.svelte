@@ -4722,20 +4722,6 @@
     align-self: center;
     gap: 0;
   }
-  .pairing-start .pairing-logo {
-    cursor: default;
-    margin-bottom: 8px;
-  }
-  .pairing-start .pairing-logo:hover {
-    transform: none;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-  }
-  .pairing-start .app-logo {
-    width: 80px;
-    height: 80px;
-    margin-bottom: 0;
-    animation: none;
-  }
   .pairing-get-started {
     font-size: var(--font-size-xl, 22px);
     font-weight: 700;
@@ -4801,14 +4787,6 @@
   :global([data-theme="darkPolished"]) .app-logo {
     filter: brightness(0) invert(1);
   }
-  :global([data-theme="darkPolished"]) .pairing-logo .app-logo {
-    filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
-  }
-
-  .pairing-logo:hover .app-logo,
-  .pairing-logo:focus-visible .app-logo {
-    animation: bounce 600ms;
-  }
 
   @keyframes bounce {
     0% {
@@ -4863,9 +4841,6 @@
       opacity: 0.8;
       transform: scale(1.05);
     }
-  }
-  .pairing-start .pairing-logo .app-logo {
-    animation: none;
   }
 
   .pairing-hint {

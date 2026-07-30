@@ -3,15 +3,23 @@
   import { walletStore, initializeWalletStore, refreshWalletData, updateWalletFromPairing } from '$lib/stores/wallet';
   import QRScanner from '$lib/components/QRScanner.svelte';
   import SendTransaction from '$lib/components/SendTransaction.svelte';
+  import ActiveTxVisualizer from '$lib/components/ActiveTxVisualizer.svelte';
   import { qr } from '$lib/services/qr';
   import logo from '$lib/assets/logo.png';
   import { keyshareFingerprint as computeKeyshareFingerprint } from '$lib/services/keyshareFingerprint';
+
+  // Type for visualizer phase (kept in sync with component)
+  type TxVisualizerPhase = 'idle' | 'signing' | 'broadcasting' | 'mempool' | 'confirmed';
 
   let showPairingQR = false;
   let showScanner = false;
   let showSendModal = false;
   let pairingQRData = '';
   let pairingStatus = 'Click logo to start pairing';
+
+  // Active transaction visualizer state
+  let activeTxVisualizerTxid: string | null = null;
+  let activeTxVisualizerPhase: 'idle' | 'signing' | 'broadcasting' | 'mempool' | 'confirmed' = 'idle';
 
   // Reactive: Check if wallet is paired based on store
   $: isPaired = !!$walletStore.publicKey && $walletStore.publicKey.trim() !== '';
@@ -134,9 +142,27 @@
 
   function handleSendSuccess(txid: string) {
     showSendModal = false;
-    alert(`Transaction sent successfully!\n\nTXID: ${txid}`);
+
+    // Start the visual transaction tracker for the new tx
+    activeTxVisualizerTxid = txid;
+    activeTxVisualizerPhase = 'broadcasting'; // start from broadcast (after signing)
+
+    // Auto-clear visualizer after confirmation (or keep it visible)
+    // The visualizer itself will transition to 'confirmed' via polling.
+
     // Refresh wallet to show updated balance
     refreshWalletData();
+  }
+
+  function handleVisualizerPhaseChange(phase: string) {
+    // Optional: react to phase changes (e.g. log or update UI)
+    if (phase === 'confirmed') {
+      // Keep the visualizer visible for a while so user sees success state
+      setTimeout(() => {
+        // Optionally clear after confirmation to show real tx list:
+        // activeTxVisualizerTxid = null;
+      }, 8000);
+    }
   }
 
   function formatBTC(btc: string): string {
@@ -251,7 +277,16 @@
 
         <div class="transactions-section">
           <h3>Recent Transactions</h3>
-          {#if $walletStore.transactions.length === 0}
+
+          {#if activeTxVisualizerTxid}
+            <!-- Active transaction visualizer (replaces empty state during lifecycle) -->
+            <ActiveTxVisualizer
+              txid={activeTxVisualizerTxid}
+              initialPhase={activeTxVisualizerPhase}
+              compact={true}
+              onPhaseChange={handleVisualizerPhaseChange}
+            />
+          {:else if $walletStore.transactions.length === 0}
             <p class="no-transactions">No transactions yet</p>
           {:else}
             <div class="transaction-list">
