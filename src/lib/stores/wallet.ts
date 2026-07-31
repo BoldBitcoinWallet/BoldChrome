@@ -2,6 +2,12 @@ import { writable, derived } from 'svelte/store';
 import { storage } from '../services/storage';
 import { blockchain } from '../services/blockchain';
 import { hdWallet, type DerivedAddress as HDDerivedAddress, type HdState, GAP_LIMIT } from '../services/hdwallet';
+import {
+  savePairedWalletForNetwork,
+  getActiveAddressForNetwork,
+  getPairedWalletState,
+} from '../services/multiNetworkStorage';
+import { setNetwork as setNetworkStore } from './network';
 
 const HD_DISCOVERY_STALE_MS = 2 * 60 * 60 * 1000; // 2 hours
 
@@ -137,12 +143,22 @@ export async function resetWallet() {
  * Initialize wallet store from storage
  */
 export async function initializeWalletStore() {
-  const address = await storage.get<string>('address');
-  const publicKey = await storage.get<string>('publicKey');
-  const chainCode = await storage.get<string>('chainCode');
+  const network = (await storage.get<string>('network') as 'mainnet' | 'testnet') || 'mainnet';
+
+  // Try multi-network storage first
+  const multi = await getPairedWalletState();
+  let address = await storage.get<string>('address');
+  let publicKey = await storage.get<string>('publicKey');
+  let chainCode = await storage.get<string>('chainCode');
+
+  if (multi) {
+    address = multi.addresses[network] || address;
+    publicKey = multi.pubKeys[network] || publicKey;
+    chainCode = multi.chainCodes[network] || chainCode;
+  }
+
   const addressesJson = await storage.get<string>('addresses');
   const addresses: DerivedAddress[] = addressesJson ? JSON.parse(addressesJson) : [];
-  const network = await storage.get<string>('network') as 'mainnet' | 'testnet';
   const hdStateJson = await storage.get<string>('hdState');
   const hdState: HdState | undefined = hdStateJson ? JSON.parse(hdStateJson) : undefined;
 
@@ -153,7 +169,7 @@ export async function initializeWalletStore() {
     chainCode: chainCode ?? undefined,
     addresses,
     hdState,
-    network: network || 'mainnet'
+    network
   }));
 }
 
@@ -309,17 +325,30 @@ export async function updateWalletFromPairing(data: {
     throw new Error('No public key provided in pairing response');
   }
 
-  // Store public key
-  await storage.set('publicKey', data.publicKey);
-
-  // Store chain code if provided
-  if (data.chainCode) {
-    await storage.set('chainCode', data.chainCode);
+  // Detect network from address prefix if not explicitly provided
+  let network: 'mainnet' | 'testnet' = data.network || 'mainnet';
+  const addr = data.address || (data.addresses && data.addresses[0]?.address);
+  if (!data.network && addr) {
+    network = /^tb1q|^tb1p|^[mn2]/.test(addr) ? 'testnet' : 'mainnet';
   }
 
-  // Set network if provided
-  const network = data.network || 'mainnet';
+  // Persist to multi-network storage (does not overwrite the other network)
+  await savePairedWalletForNetwork(network, {
+    address: addr || '',
+    publicKey: data.publicKey,
+    chainCode: data.chainCode || '',
+    fingerprint: undefined,
+  });
+
+  // Also keep legacy single-network fields for backward compatibility
+  await storage.set('publicKey', data.publicKey);
+  if (data.chainCode) await storage.set('chainCode', data.chainCode);
   await storage.set('network', network);
+
+  // If Testnet address was provided, ensure the network store is also updated
+  if (network === 'testnet') {
+    await setNetworkStore('testnet');
+  }
 
   // Add device to paired devices list
   const deviceId = data.deviceId || 'mobile-wallet';
@@ -331,11 +360,11 @@ export async function updateWalletFromPairing(data: {
     ...state,
     publicKey: data.publicKey,
     chainCode: data.chainCode,
-    network: network as 'mainnet' | 'testnet',
+    network,
     pairedDevices
   }));
 
-  console.log('[Wallet] Paired with device:', deviceId);
+  console.log('[Wallet] Paired with device:', deviceId, 'network:', network);
   
   // If addresses were provided directly, use them
   if (data.addresses && data.addresses.length > 0) {
@@ -475,7 +504,7 @@ export async function runHdDiscovery(force = false, overrideAddressType?: 'segwi
 
   await updateAddresses(addresses);
 
-  // Set active address to current receive address
+  // Set active address to current receive address (network-aware)
   if (result.externalNext >= 0) {
     const [receiveAddr] = hdWallet.deriveAddresses(config, addressType, 1, result.externalNext, 0);
     if (receiveAddr) {
@@ -618,6 +647,27 @@ export async function refreshWalletData() {
       ...state,
       isLoading: false,
       error: 'No wallet addresses configured'
+    }));
+    return;
+  }
+
+  // === Network guard: never send Mainnet addresses to Testnet Esplora ===
+  const currentNetwork = (await storage.get<'mainnet' | 'testnet'>('network')) || 'mainnet';
+  const isTestnetFormat = (addr: string) => /^tb1q|^tb1p|^[mn2]/.test(addr);
+  const isMainnetFormat = (addr: string) => /^bc1q|^bc1p|^[13]/.test(addr);
+
+  addresses = addresses.filter(a => {
+    if (currentNetwork === 'testnet') return isTestnetFormat(a.address);
+    return isMainnetFormat(a.address);
+  });
+
+  if (!addresses.length) {
+    walletStore.update(state => ({
+      ...state,
+      isLoading: false,
+      error: currentNetwork === 'testnet'
+        ? 'No Testnet-format addresses available. Pair a Testnet wallet (tb1q...) from the mobile app.'
+        : 'No Mainnet addresses configured'
     }));
     return;
   }

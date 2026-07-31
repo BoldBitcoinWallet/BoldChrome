@@ -90,7 +90,7 @@ export interface RecommendedFees {
 }
 
 const DEFAULT_MAINNET_API = DEFAULT_MAINNET_MEMPOOL_API_BASE;
-const DEFAULT_TESTNET_API = 'https://mempool.space/testnet/api';
+const DEFAULT_TESTNET_API = 'https://mempool.space/testnet4/api';
 const FETCH_TIMEOUT_MS = 5000;
 
 /** Minimum pause between uncached Esplora address calls (stats / utxo / txs). */

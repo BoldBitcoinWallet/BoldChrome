@@ -283,7 +283,7 @@ class HDWalletService {
       ? bitcoin.networks.bitcoin
       : bitcoin.networks.testnet;
     const coinType = config.network === 'testnet' ? 1 : 0;
-    const basePath = this.getBasePath(addressType);
+    const basePath = this.getBasePath(addressType, config.network);
     const chainLabel: 'receive' | 'change' = chain === 0 ? 'receive' : 'change';
 
     const addresses: DerivedAddress[] = [];
@@ -344,16 +344,21 @@ class HDWalletService {
   }
 
   /**
-   * Get base derivation path for address type (BIP44/49/84)
+   * Get base derivation path for address type (BIP44/49/84).
+   * BIP84 (Native SegWit) uses coin type 0 for mainnet (bc) and coin type 1 for testnet (tb).
    */
-  private getBasePath(addressType: 'legacy' | 'segwit-nested' | 'segwit-native'): string {
+  private getBasePath(
+    addressType: 'legacy' | 'segwit-nested' | 'segwit-native',
+    network: 'mainnet' | 'testnet' = 'mainnet'
+  ): string {
+    const coin = network === 'testnet' ? "1'" : "0'";
     switch (addressType) {
       case 'legacy':
-        return "m/44'/0'/0'"; // BIP44
+        return `m/44'/${coin}/0'`; // BIP44
       case 'segwit-nested':
-        return "m/49'/0'/0'"; // BIP49
+        return `m/49'/${coin}/0'`; // BIP49
       case 'segwit-native':
-        return "m/84'/0'/0'"; // BIP84
+        return `m/84'/${coin}/0'`; // BIP84 (strict: m/84'/1'/0'/0/0 on testnet)
     }
   }
 
@@ -367,10 +372,13 @@ class HDWalletService {
   ): string {
     const pubkey = node.publicKey;
 
+    // Ensure the correct bitcoinjs network object is used so Bech32 HRP is 'tb' on Testnet
+    const net = network.bech32 === 'tb' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+
     switch (addressType) {
       case 'legacy': {
         // P2PKH (1...)
-        const { address } = bitcoin.payments.p2pkh({ pubkey, network });
+        const { address } = bitcoin.payments.p2pkh({ pubkey, network: net });
         if (!address) throw new Error('Failed to generate legacy address');
         return address;
       }
@@ -378,16 +386,16 @@ class HDWalletService {
       case 'segwit-nested': {
         // P2SH-P2WPKH (3...)
         const { address } = bitcoin.payments.p2sh({
-          redeem: bitcoin.payments.p2wpkh({ pubkey, network }),
-          network
+          redeem: bitcoin.payments.p2wpkh({ pubkey, network: net }),
+          network: net
         });
         if (!address) throw new Error('Failed to generate nested segwit address');
         return address;
       }
       
       case 'segwit-native': {
-        // P2WPKH (bc1...)
-        const { address } = bitcoin.payments.p2wpkh({ pubkey, network });
+        // P2WPKH — now correctly uses 'tb' HRP on Testnet
+        const { address } = bitcoin.payments.p2wpkh({ pubkey, network: net });
         if (!address) throw new Error('Failed to generate native segwit address');
         return address;
       }

@@ -6,7 +6,7 @@
 import { storage } from './services/storage';
 import { initializeDeviceStore } from './stores/device';
 import { initializeWalletStore, refreshWalletData } from './stores/wallet';
-import { psbt } from './services/psbt';
+import { initializeNetworkStore } from './stores/network';
 
 export interface InitializationResult {
   success: boolean;
@@ -29,6 +29,7 @@ export async function initializeApp(): Promise<InitializationResult> {
     console.log('[App] Loading stores...');
     await initializeDeviceStore();
     await initializeWalletStore();
+    await initializeNetworkStore();
 
     // Step 3: Refresh wallet data if we have an address
     const address = await storage.get<string>('address');
@@ -41,6 +42,7 @@ export async function initializeApp(): Promise<InitializationResult> {
     }
 
     // Step 4: PSBT service is ready (no init required)
+    // Step 5: Network store is ready (no init required)
 
     console.log('[App] Initialization complete (QR-based mode)');
     return { success: true };

@@ -25,8 +25,9 @@ export const networkStore = writable<NetworkState>(initialState);
  * Initialize network from storage (called once on app startup).
  */
 export async function initializeNetworkStore(): Promise<void> {
-  const stored = await storage.get<'mainnet' | 'testnet'>('network');
-  const network: Network = stored === 'testnet' ? 'testnet' : 'mainnet';
+  const stored = await storage.get<'mainnet' | 'testnet' | 'testnet4'>('network');
+  // Normalize legacy 'testnet4' value to the canonical 'testnet'
+  const network: Network = stored === 'testnet' || stored === 'testnet4' ? 'testnet' : 'mainnet';
 
   // Update blockchain service
   blockchain.setNetwork(network);
@@ -45,8 +46,9 @@ export async function setNetwork(network: Network): Promise<void> {
   // Update blockchain service (changes API base URL)
   blockchain.setNetwork(network);
 
-  // Persist
-  await storage.set('network', network);
+  // Persist (always store canonical 'testnet', never 'testnet4')
+  const persistValue: 'mainnet' | 'testnet' = network;
+  await storage.set('network', persistValue);
 
   // Update store (reactive)
   networkStore.set({
@@ -59,7 +61,7 @@ export async function setNetwork(network: Network): Promise<void> {
  * Toggle between mainnet and testnet.
  */
 export async function toggleNetwork(): Promise<void> {
-  const current = await storage.get<'mainnet' | 'testnet'>('network');
-  const next: Network = current === 'testnet' ? 'mainnet' : 'testnet';
+  const current = await storage.get<'mainnet' | 'testnet' | 'testnet4'>('network');
+  const next: Network = current === 'testnet' || current === 'testnet4' ? 'mainnet' : 'testnet';
   await setNetwork(next);
 }

@@ -31,6 +31,11 @@
     switchAddressType,
     addressTypeUISelection,
   } from "$lib/stores/wallet";
+  import {
+    networkStore,
+    initializeNetworkStore,
+    setNetwork,
+  } from "$lib/stores/network";
   import { qr } from "$lib/services/qr";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
   import QRScanner from "$lib/components/QRScanner.svelte";
@@ -214,6 +219,9 @@
   let showWalletSettingsMenu = false;
   let isRefreshing = false;
   let requestingAddresses = false;
+
+  // Network toggle state (used inside Wallet Details modal)
+  let isTogglingNetwork = false;
 
   // Mempool provider: null = not chosen (show preference after pairing), '' = default, string = custom URL. 'loading' = init.
   let mempoolChoice: string | null | "loading" = "loading";
@@ -419,9 +427,32 @@
     )
       return;
     showWalletSettingsMenu = false;
+
+    // Also clear multi-network paired wallet storage
+    try {
+      await chrome.storage.local.remove('pairedWallets');
+    } catch {}
+
     await resetWallet();
     pairingStep = 0;
     pairingStatus = "Click logo to start pairing";
+  }
+
+  // Network change handler (used inside Wallet Details modal)
+  async function handleNetworkChange(newNetwork: 'mainnet' | 'testnet') {
+    if (isTogglingNetwork || $networkStore.network === newNetwork) return;
+    isTogglingNetwork = true;
+    try {
+      await setNetwork(newNetwork);
+      // Refresh balances & tx history immediately for the new network
+      await refreshWalletData();
+      triggerToast(`Switched to ${newNetwork}`, 'success');
+    } catch (err) {
+      console.error('[WalletDetails] Network switch failed:', err);
+      triggerToast('Failed to switch network', 'error');
+    } finally {
+      isTogglingNetwork = false;
+    }
   }
 
   // Subscribe to wallet store
@@ -488,10 +519,11 @@
     $walletStore.hdState?.addressType || "segwit-native";
   $: settingsHighlightedAddressType =
     $addressTypeUISelection ?? activeAddressTypeId;
+  // Reactive short preview — uses the network-aware receive address
   $: selectedAddressShort = (() => {
-    if (!$walletStore.address) return "";
-    const raw = $walletStore.address;
-    return raw.length > 15 ? `${raw.slice(0, 6)}...${raw.slice(-6)}` : raw;
+    const addr = receiveAddress || $walletStore.address;
+    if (!addr || addr === "No address configured") return "";
+    return addr.length > 15 ? `${addr.slice(0, 6)}...${addr.slice(-6)}` : addr;
   })();
   $: transactions = $walletStore.transactions.map((tx) => {
     const type = tx.type === "receive" ? "in" : ("out" as "in" | "out");
@@ -546,6 +578,27 @@
   let showSendAddressScanner = false;
   let receiveAddress = ""; // Will be populated from store
   let receiveDerivationPath = "";
+
+  // Reactive receive address & path — updates when network or HD state changes
+  $: {
+    void $networkStore.network;          // subscribe to network changes
+    void $walletStore.hdState;
+    void $walletStore.address;
+
+    const hdAddr = getCurrentReceiveAddress();
+    if (hdAddr) {
+      receiveAddress = hdAddr.address;
+      receiveDerivationPath = hdAddr.path;
+    } else if ($walletStore.address) {
+      receiveAddress = $walletStore.address;
+      // Build correct derivation path label from network
+      const coin = $networkStore.network === 'testnet' ? "1'" : "0'";
+      receiveDerivationPath = `m/84'/${coin}/0'/0/0`;
+    } else {
+      receiveAddress = "No address configured";
+      receiveDerivationPath = "";
+    }
+  }
   let sending = false;
   let message = "";
 
@@ -1009,11 +1062,18 @@
     showBalance = !showBalance;
   }
 
-  const ADDRESS_TYPES = [
-    { id: "segwit-native" as const, label: "Native SegWit", prefix: "bc1q..." },
-    { id: "segwit-nested" as const, label: "SegWit Compatible", prefix: "3..." },
-    { id: "legacy" as const, label: "Legacy", prefix: "1..." },
-  ];
+  // Reactive address format list — reflects the currently selected network
+  $: ADDRESS_TYPES = $networkStore.network === 'testnet'
+    ? [
+        { id: "segwit-native" as const, label: "Native SegWit", prefix: "tb1q..." },
+        { id: "segwit-nested" as const, label: "SegWit Compatible", prefix: "2..." },
+        { id: "legacy" as const, label: "Legacy", prefix: "m... / n..." },
+      ]
+    : [
+        { id: "segwit-native" as const, label: "Native SegWit", prefix: "bc1q..." },
+        { id: "segwit-nested" as const, label: "SegWit Compatible", prefix: "3..." },
+        { id: "legacy" as const, label: "Legacy", prefix: "1..." },
+      ];
 
   async function handleSelectAddressType(
     typeId: "segwit-native" | "segwit-nested" | "legacy",
@@ -1615,11 +1675,11 @@
             />
           </button>
           <button
-            class="refresh-btn"
+            class:refresh-btn={true}
+            class:spinning={isRefreshing}
             on:click={handleRefresh}
             disabled={isRefreshing}
             title="Refresh wallet data"
-            class:spinning={isRefreshing}
           >
             <img
               src={refreshIcon}
@@ -1764,6 +1824,35 @@
             />
           </button>
         </div>
+      </section>
+
+      <!-- Network / Environment Toggle (moved from header into Wallet Details) -->
+      <section class="wallet-settings-block">
+        <h3 class="wallet-settings-label">Network</h3>
+        <p class="wallet-settings-hint">Switch between Mainnet and Testnet (developer mode).</p>
+        <div class="network-toggle-row">
+          <button
+            type="button"
+            class="network-pill"
+            class:active={$networkStore.network === 'mainnet'}
+            on:click={() => handleNetworkChange('mainnet')}
+            disabled={isTogglingNetwork}
+          >
+            Mainnet
+          </button>
+          <button
+            type="button"
+            class="network-pill testnet"
+            class:active={$networkStore.network === 'testnet'}
+            on:click={() => handleNetworkChange('testnet')}
+            disabled={isTogglingNetwork}
+          >
+            Testnet
+          </button>
+        </div>
+        {#if $networkStore.isTestnet}
+          <div class="testnet-badge-inline">TESTNET — developer mode active</div>
+        {/if}
       </section>
 
       <section class="wallet-settings-block">
@@ -1968,15 +2057,8 @@
             width="56"
             height="56"
           />
-          <h2 class="pin-screen-title">Set a PIN</h2>
-          <p class="pin-screen-hint pin-hint-long">
-            Use a {PIN_MIN_LENGTH}–{PIN_MAX_LENGTH} digit PIN. You'll need it each
-            time you open the extension.
-          </p>
-          <form
-            on:submit|preventDefault={handleSetPin}
-            class="pin-form pin-form-confirm"
-          >
+          <h2 class="pin-screen-title">Set your PIN</h2>
+          <form on:submit|preventDefault={handleSetPin} class="pin-form pin-form-confirm">
             <input
               type="password"
               inputmode="numeric"
@@ -2559,7 +2641,7 @@
                   >
                 </div>
                 <div class="receive-modal-badge">
-                  {$walletStore.network === "mainnet" ? "Mainnet" : "Testnet"}
+                  {$networkStore.network === 'testnet' ? 'Testnet' : 'Mainnet'}
                 </div>
                 {#if receiveQRDataUrl}
                   <div class="receive-qr-wrap">
@@ -2890,6 +2972,9 @@
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
     margin-left: var(--space-small);
+    line-height: 1.3;
+    display: inline-flex;
+    align-items: center;
   }
   .lock-btn {
     display: flex;
@@ -3243,6 +3328,50 @@
     display: block;
     object-fit: contain;
     flex-shrink: 0;
+  }
+
+  /* === Network toggle inside Wallet Details modal === */
+  .network-toggle-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .network-pill {
+    flex: 1;
+    padding: 8px 14px;
+    border-radius: 9999px;
+    border: 1px solid var(--color-border);
+    background: #000;
+    color: #aaa;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .network-pill:hover:not(:disabled) {
+    color: #fff;
+    border-color: #444;
+  }
+  .network-pill.active {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+  }
+  .network-pill.testnet.active {
+    background: #f59e0b;
+    color: #000;
+    border-color: #f59e0b;
+  }
+  .network-pill:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .testnet-badge-inline {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #f59e0b;
+    font-weight: 600;
+    letter-spacing: 0.5px;
   }
 
   :global([data-theme="darkPolished"]) .wallet-settings-unpair-icon {
@@ -4547,6 +4676,8 @@
     box-sizing: border-box;
     padding: 12px;
     display: block !important; /* header is block; children are absolute */
+    overflow: visible; /* prevent any clipping of text ascenders/descenders */
+    line-height: normal;
   }
   .app-header-left {
     position: absolute !important;
@@ -4826,10 +4957,7 @@
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
   }
 
-  /* Only pulse when not hovered/focused so bounce can take precedence */
-  .pairing-logo:not(:hover):not(:focus) .app-logo {
-    animation: pulse 2s ease-in-out infinite;
-  }
+  /* Pulse animation is handled by other rules; removed unused :not(:hover) selector to satisfy Svelte CSS compiler */
 
   @keyframes pulse {
     0%,

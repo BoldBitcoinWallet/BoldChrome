@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { walletStore, initializeWalletStore, refreshWalletData, updateWalletFromPairing } from '$lib/stores/wallet';
+import { initializeNetworkStore } from '$lib/stores/network';
   import QRScanner from '$lib/components/QRScanner.svelte';
   import SendTransaction from '$lib/components/SendTransaction.svelte';
   import ActiveTxVisualizer from '$lib/components/ActiveTxVisualizer.svelte';

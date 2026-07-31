@@ -29,3 +29,12 @@ export {
   type WalletState,
   type Transaction,
 } from './wallet';
+
+// Export all network store functionality
+export {
+  networkStore,
+  initializeNetworkStore,
+  setNetwork,
+  toggleNetwork,
+  type Network,
+} from './network';

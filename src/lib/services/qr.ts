@@ -15,6 +15,7 @@ import {
   isBoldBindResponse,
   getBoldBindPairingCodeStorageKey,
 } from './extensionBind';
+import { setNetwork } from '$lib/stores/network';
 
 export type QRDataType = 
   | 'pairing' 
@@ -313,6 +314,27 @@ class QRService {
   async processScanedQR(qrText: string): Promise<{ type: QRDataType; data: any }> {
     try {
       console.log('[QR] Processing scanned data:', qrText.substring(0, 100) + '...');
+
+      // BIP-21 URI + Testnet auto-detect (bitcoin:<addr>?network=testnet or tb1/m/n/2 prefixes)
+      const bip21Match = qrText.match(/^bitcoin:([^?]+)(\?.*)?$/i);
+      if (bip21Match) {
+        const address = bip21Match[1];
+        const query = bip21Match[2] || '';
+        const isTestnet =
+          /network=testnet/i.test(query) ||
+          /^tb1q|^tb1p|^[mn2]/.test(address);
+
+        if (isTestnet) {
+          // Switch global network store so blockchain service uses /testnet/api
+          await setNetwork('testnet');
+        }
+
+        // Treat as a plain Bitcoin address (Testnet or Mainnet)
+        return {
+          type: 'bitcoin_address',
+          data: { address, network: isTestnet ? 'testnet' : 'mainnet' }
+        };
+      }
 
       // Bold mobile bind response (swimlanes.io): base64 67-byte response from mobile
       if (typeof qrText === 'string' && isBoldBindResponse(qrText)) {
