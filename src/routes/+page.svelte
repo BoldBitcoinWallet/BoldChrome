@@ -278,15 +278,7 @@
         <div class="transactions-section">
           <h3>Recent Transactions</h3>
 
-          {#if activeTxVisualizerTxid}
-            <!-- Active transaction visualizer (replaces empty state during lifecycle) -->
-            <ActiveTxVisualizer
-              txid={activeTxVisualizerTxid}
-              initialPhase={activeTxVisualizerPhase}
-              compact={true}
-              onPhaseChange={handleVisualizerPhaseChange}
-            />
-          {:else if $walletStore.transactions.length === 0}
+          {#if $walletStore.transactions.length === 0}
             <p class="no-transactions">No transactions yet</p>
           {:else}
             <div class="transaction-list">
@@ -301,6 +293,18 @@
                   </div>
                 </div>
               {/each}
+            </div>
+          {/if}
+
+          {#if activeTxVisualizerTxid}
+            <div class="active-tx-visualizer-wrap">
+              <ActiveTxVisualizer
+                txid={activeTxVisualizerTxid}
+                network={$walletStore.network}
+                initialPhase={activeTxVisualizerPhase}
+                compact={true}
+                onPhaseChange={handleVisualizerPhaseChange}
+              />
             </div>
           {/if}
         </div>
@@ -833,6 +837,10 @@
     color: #6b7280;
     font-size: 14px;
     padding: 24px;
+  }
+
+  .active-tx-visualizer-wrap {
+    margin-top: 14px;
   }
 
   .actions {

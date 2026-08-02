@@ -21,6 +21,13 @@
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
   let error = '';
   let step: 'form' | 'qr' | 'scanning' | 'broadcasting' = 'form';
+  const psbtSession = psbt.session;
+  let lastCompletedTxid = '';
+
+  $: if ($psbtSession?.status === 'broadcasted' && $psbtSession.txid && $psbtSession.txid !== lastCompletedTxid) {
+    lastCompletedTxid = $psbtSession.txid;
+    onSuccess($psbtSession.txid);
+  }
 
   // Subscribe to QR session updates
   $: qrSession = qr.session;
@@ -224,6 +231,18 @@
     <div class="qr-section">
       {#if qrMode === 'psbt'}
         <p class="instruction">Scan this QR code with your mobile wallet to sign the transaction</p>
+        {#if $psbtSession?.deliveryMode === 'nostr+qr'}
+          <p class="instruction" style="margin-top: 6px; opacity: 0.9;">
+            Awaiting peer approval over Nostr… QR fallback stays available.
+            {#if $psbtSession?.nostrState === 'timeout'}
+              Nostr delivery timed out.
+            {:else if $psbtSession?.nostrState === 'failed'}
+              Nostr delivery failed.
+            {:else if $psbtSession?.nostrState === 'delivered'}
+              Signed PSBT received over Nostr.
+            {/if}
+          </p>
+        {/if}
       {:else}
         <p class="instruction">Scan this QR code with your mobile wallet to populate the send form (address, amount, fee) and complete the send from your mobile device.</p>
       {/if}

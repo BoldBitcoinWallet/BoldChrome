@@ -16,7 +16,7 @@
   import addressTypeIcon from "$lib/assets/address-type-icon.png";
   import bitcoinLogo from "$lib/assets/bitcoin-logo.png";
   import pasteIcon from "$lib/assets/paste-icon.png";
-  import { onMount, tick } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { fade } from "svelte/transition";
   import { get } from "svelte/store";
   import {
@@ -57,6 +57,14 @@
   import lockerIcon from "$lib/assets/locker-icon.png";
   import { keyshareFingerprint as computeKeyshareFingerprint } from "$lib/services/keyshareFingerprint";
   import GetStartedView from "$lib/components/GetStartedView.svelte";
+  import ActiveTxVisualizer from "$lib/components/ActiveTxVisualizer.svelte";
+
+  type TxVisualizerPhase =
+    | "idle"
+    | "signing"
+    | "broadcasting"
+    | "mempool"
+    | "confirmed";
 
   function getExtensionVersionLabel(): string {
     try {
@@ -559,6 +567,44 @@
       fiatAmount: btcRate > 0 ? (amountBtc * btcRate).toFixed(2) : "",
     };
   });
+
+  // Active transaction visualizer state (shown below transaction history).
+  let activeTxVisualizerTxid: string | null = null;
+  let activeTxVisualizerPhase: TxVisualizerPhase = "idle";
+  let clearVisualizerTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Auto-track latest outgoing transaction after co-sign/broadcast.
+  $: {
+    const outgoingPending = $walletStore.transactions.find(
+      (tx) => tx.type === "send" && tx.status === "pending",
+    );
+
+    if (outgoingPending) {
+      activeTxVisualizerTxid = outgoingPending.txid;
+      activeTxVisualizerPhase = "mempool";
+      if (clearVisualizerTimer) {
+        clearTimeout(clearVisualizerTimer);
+        clearVisualizerTimer = null;
+      }
+    } else if (activeTxVisualizerTxid) {
+      const tracked = $walletStore.transactions.find(
+        (tx) => tx.txid === activeTxVisualizerTxid,
+      );
+      if (tracked?.status === "confirmed") {
+        activeTxVisualizerPhase = "confirmed";
+      }
+    }
+  }
+
+  function handleTxVisualizerPhaseChange(phase: string) {
+    if (phase !== "confirmed") return;
+    if (clearVisualizerTimer) clearTimeout(clearVisualizerTimer);
+    clearVisualizerTimer = setTimeout(() => {
+      activeTxVisualizerTxid = null;
+      activeTxVisualizerPhase = "idle";
+      clearVisualizerTimer = null;
+    }, 10000);
+  }
 
   let showSend = false;
   let showReceive = false;
@@ -1512,6 +1558,13 @@
     }
   }
 
+  onDestroy(() => {
+    if (clearVisualizerTimer) {
+      clearTimeout(clearVisualizerTimer);
+      clearVisualizerTimer = null;
+    }
+  });
+
   onMount(async () => {
     console.log("[popup.html] onMount - initializing wallet store");
     await initializeWalletStore();
@@ -2446,6 +2499,18 @@
                     {/if}
                   </div>
                 {/if}
+              {/if}
+
+              {#if activeTxVisualizerTxid}
+                <div class="active-tx-visualizer-wrap">
+                  <ActiveTxVisualizer
+                    txid={activeTxVisualizerTxid}
+                    network={$walletStore.network}
+                    initialPhase={activeTxVisualizerPhase}
+                    compact={true}
+                    onPhaseChange={handleTxVisualizerPhaseChange}
+                  />
+                </div>
               {/if}
             </section>
           {:else}
@@ -4054,6 +4119,10 @@
   .tx-list-load-more:hover {
     background: var(--color-background);
     border-color: var(--color-primary);
+  }
+
+  .active-tx-visualizer-wrap {
+    margin-top: 12px;
   }
 
   /* App-style transaction item card */

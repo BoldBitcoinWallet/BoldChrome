@@ -445,6 +445,7 @@ class QRService {
             addresses: qrData.addresses,
             pubKeys: qrData.pubKeys,
             fingerprint: qrData.fingerprint,
+            nostr_npub: qrData.nostr_npub,
           };
           const processed = await this.processPairingData(pairingData);
           return { type: 'pairing_response', data: processed };
@@ -459,7 +460,8 @@ class QRService {
             deviceId: qrData.deviceId || 'mobile-wallet',
             network: qrData.network || 'mainnet',
             address: qrData.address,
-            addresses: qrData.addresses
+            addresses: qrData.addresses,
+            nostr_npub: qrData.nostr_npub,
           };
           const processed = await this.processPairingData(pairingData);
           return { type: 'pairing_response', data: processed };
@@ -530,7 +532,8 @@ class QRService {
               deviceId: qrData.deviceId || 'mobile-wallet',
               network: qrData.network || 'mainnet',
               address: qrData.address,
-              addresses: qrData.addresses
+              addresses: qrData.addresses,
+              nostr_npub: qrData.nostr_npub,
             };
             const processed = await this.processPairingData(pairingData);
             return { type: 'pairing_response', data: processed };
@@ -577,7 +580,8 @@ class QRService {
                     deviceId: qrData.deviceId || 'mobile-wallet',
                     network: qrData.network || 'mainnet',
                     address: qrData.address,
-                    addresses: qrData.addresses
+                    addresses: qrData.addresses,
+                    nostr_npub: qrData.nostr_npub,
                   };
                   const processed = await this.processPairingData(pairingData);
                   return { type: 'pairing_response', data: processed };
@@ -790,6 +794,7 @@ class QRService {
         network: parsed.network ?? parsed.n,
         address: parsed.address ?? parsed.a,
         addresses: parsed.addresses ?? parsed.addrs,
+        nostr_npub: parsed.nostr_npub ?? parsed.npub,
       };
       console.log('[QR] Decrypted pairing payload');
       return normalized;

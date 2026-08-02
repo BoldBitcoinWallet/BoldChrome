@@ -11,6 +11,13 @@ import { writable, get } from 'svelte/store';
 import { walletStore, getNextChangeAddress, type TaggedUTXO } from '../stores/wallet';
 import { blockchain } from './blockchain';
 import { qr } from './qr';
+import { storage } from './storage';
+import {
+  nostrMessaging,
+  type CoSignRequestPayload,
+  type CoSignResponsePayload,
+} from './nostrMessaging';
+import { keyshareFingerprint } from './keyshareFingerprint';
 
 // Set up sync hashes for @noble/secp256k1
 hashes.sha256 = (msg: Uint8Array) => sha256(msg);
@@ -219,6 +226,8 @@ export interface PsbtSession {
   feeSats?: number;
   txid?: string;
   error?: string;
+  deliveryMode?: 'qr' | 'nostr+qr';
+  nostrState?: 'idle' | 'pending' | 'delivered' | 'timeout' | 'failed';
 }
 
 export interface CreatePsbtParams {
@@ -371,14 +380,114 @@ class PsbtService {
       throw new Error('No active PSBT session');
     }
 
-    this.currentSession.update(s => s ? { ...s, status: 'awaiting_signature' } : null);
+    this.currentSession.update(s => s ? {
+      ...s,
+      status: 'awaiting_signature',
+      deliveryMode: 'qr',
+      nostrState: 'idle',
+    } : null);
 
-    // Generate QR code for mobile to scan
+    const wallet = get(walletStore);
+    const pairedNostrNpub = (wallet.pairedNostrNpub || '').trim();
+
+    if (pairedNostrNpub) {
+      this.currentSession.update(s => s ? {
+        ...s,
+        deliveryMode: 'nostr+qr',
+        nostrState: 'pending',
+      } : null);
+      void this.tryNostrCoSignDelivery(pairedNostrNpub, psbtBase64, session.psbtId);
+    }
+
+    // Keep QR as the universal fallback path.
     await qr.generatePsbtQR(psbtBase64);
-    
-    console.log('[PSBT] QR code generated - waiting for mobile to scan and sign');
+
+    console.log('[PSBT] QR code generated. Nostr delivery state:', pairedNostrNpub ? 'pending' : 'disabled');
 
     return session.psbtId;
+  }
+
+  private async tryNostrCoSignDelivery(recipientNpub: string, psbtBase64: string, txId: string): Promise<void> {
+    try {
+      await nostrMessaging.connect();
+
+      const wallet = get(walletStore);
+      const variant = await storage.get<'testnet' | 'testnet4'>('testnetApiVariant');
+      const network =
+        wallet.network === 'mainnet'
+          ? 'mainnet'
+          : variant === 'testnet4'
+          ? 'testnet4'
+          : 'testnet';
+
+      const payload: CoSignRequestPayload = {
+        txId,
+        psbtHex: nostrMessaging.psbtBase64ToHex(psbtBase64),
+        psbtBase64,
+        amountSats: Number(get(this.currentSession)?.amountSats || 0),
+        feeSats: Number(get(this.currentSession)?.feeSats || 0),
+        recipientAddress: String(get(this.currentSession)?.recipientAddress || ''),
+        network,
+      };
+
+      const senderFingerprint = keyshareFingerprint(wallet.publicKey);
+      await nostrMessaging.sendCoSignRequest(
+        recipientNpub,
+        senderFingerprint,
+        'mobile-wallet',
+        payload,
+      );
+
+      const incoming = await nostrMessaging.waitForCoSignResponse(txId, 45000);
+      const response = incoming.envelope.payload as CoSignResponsePayload;
+      if (!response.approved) {
+        this.currentSession.update(s =>
+          s
+            ? {
+                ...s,
+                nostrState: 'failed',
+                error: response.reason || 'Peer rejected co-sign request over Nostr',
+              }
+            : null,
+        );
+        return;
+      }
+
+      const signedPsbtBase64 = response.signedPsbtBase64
+        ? response.signedPsbtBase64
+        : response.signedPsbtHex
+        ? nostrMessaging.psbtHexToBase64(response.signedPsbtHex)
+        : '';
+
+      if (!signedPsbtBase64) {
+        this.currentSession.update(s =>
+          s
+            ? {
+                ...s,
+                nostrState: 'failed',
+                error: 'Nostr response did not include a signed PSBT payload',
+              }
+            : null,
+        );
+        return;
+      }
+
+      this.currentSession.update(s => (s ? { ...s, nostrState: 'delivered' } : null));
+      this.handleSignedPsbt(signedPsbtBase64);
+      await this.broadcastTransaction();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const timedOut = /timed out/i.test(message);
+      this.currentSession.update(s =>
+        s
+          ? {
+              ...s,
+              nostrState: timedOut ? 'timeout' : 'failed',
+            }
+          : null,
+      );
+      console.warn('[PSBT] Nostr co-sign delivery failed:', message);
+    }
   }
 
   /**

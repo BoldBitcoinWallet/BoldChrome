@@ -6,6 +6,7 @@
   // Props
   export let txid: string | null = null;
   export let initialPhase: 'idle' | 'signing' | 'broadcasting' | 'mempool' | 'confirmed' = 'idle';
+  export let network: 'mainnet' | 'testnet' = 'mainnet';
   export let onPhaseChange: (phase: string) => void = () => {};
   export let compact = false; // allows reuse in different containers
 
@@ -34,7 +35,13 @@
   const POLL_INTERVAL_MS = 6500;
   const FETCH_TIMEOUT_MS = 8000;
 
-  const MEMPOOL_BASE = 'https://mempool.space/api'; // public endpoint (client already handles mirrors)
+  let lastTrackedTxid: string | null = null;
+
+  function getMempoolApiBase(): string {
+    return network === 'testnet'
+      ? 'https://mempool.space/testnet/api'
+      : 'https://mempool.space/api';
+  }
 
   function setPhase(newPhase: Phase) {
     if (phase === newPhase) return;
@@ -134,7 +141,7 @@
     }
 
     try {
-      const url = `${MEMPOOL_BASE}/tx/${currentTxid}/status`;
+      const url = `${getMempoolApiBase()}/tx/${currentTxid}/status`;
 
       // Create an AbortController for timeout
       const controller = new AbortController();
@@ -224,11 +231,13 @@
     if (animationFrame) cancelAnimationFrame(animationFrame);
   });
 
-  // Reactive: when txid changes externally, restart visualization
-  $: if (txid) {
+  // Reactive: only restart visualization when txid actually changes.
+  $: if (txid && txid !== lastTrackedTxid) {
+    lastTrackedTxid = txid;
     confirmations = 0;
     txStatus = null;
-    if (phase === 'idle' || phase === 'confirmed') {
+    errorMessage = null;
+    if (phase !== 'mempool' && phase !== 'broadcasting') {
       setPhase('mempool');
     }
   }

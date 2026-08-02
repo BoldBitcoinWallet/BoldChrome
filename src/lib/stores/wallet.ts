@@ -50,6 +50,7 @@ export interface WalletState {
 
   publicKey?: string;
   chainCode?: string;
+  pairedNostrNpub?: string;
 
   // HD state
   hdState?: HdState;
@@ -151,6 +152,7 @@ export async function initializeWalletStore() {
   let address = await storage.get<string>('address');
   let publicKey = await storage.get<string>('publicKey');
   let chainCode = await storage.get<string>('chainCode');
+  const pairedNostrNpub = await storage.get<string>('pairedNostrNpub');
 
   if (multi) {
     if (network === 'testnet') {
@@ -174,6 +176,7 @@ export async function initializeWalletStore() {
     address: address || '',
     publicKey: publicKey ?? undefined,
     chainCode: chainCode ?? undefined,
+    pairedNostrNpub: pairedNostrNpub ?? undefined,
     addresses,
     hdState,
     network
@@ -327,6 +330,7 @@ export async function updateWalletFromPairing(data: {
   addresses?: { mainnet?: string; testnet?: string; testnet4?: string };
   pubKeys?: { mainnet?: string; testnet?: string; testnet4?: string };
   fingerprint?: string;
+  nostr_npub?: string;
   isRawKey?: boolean;
 }) {
   // Support both legacy single-address format and the new standardized PairingPayload
@@ -423,6 +427,7 @@ export async function updateWalletFromPairing(data: {
 
   if (activePk) await storage.set('publicKey', activePk);
   if (data.chainCode) await storage.set('chainCode', data.chainCode);
+  if (data.nostr_npub) await storage.set('pairedNostrNpub', data.nostr_npub);
   // Persist active network for legacy single-network consumers.
   const legacyNetwork = activeNetwork;
   await storage.set('network', legacyNetwork);
@@ -445,6 +450,7 @@ export async function updateWalletFromPairing(data: {
     ...state,
     publicKey: activePk || data.publicKey,
     chainCode: data.chainCode,
+    pairedNostrNpub: data.nostr_npub || state.pairedNostrNpub,
     network: legacyNetwork,
     pairedDevices
   }));

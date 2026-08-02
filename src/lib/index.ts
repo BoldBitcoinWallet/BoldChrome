@@ -9,6 +9,7 @@ export {
 } from './services/mempoolApiBase';
 export { psbt } from './services/psbt';
 export { qr } from './services/qr';
+export { nostrMessaging } from './services/nostrMessaging';
 
 // Stores
 export * from './stores';

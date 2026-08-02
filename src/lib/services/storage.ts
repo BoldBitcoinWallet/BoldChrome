@@ -16,6 +16,9 @@ export interface StorageData {
   network: 'mainnet' | 'testnet';
   publicKey?: string;
   chainCode?: string;
+  nostrNsec?: string;
+  nostrNpub?: string;
+  pairedNostrNpub?: string;
 
   // Session
   sessionToken?: string;
