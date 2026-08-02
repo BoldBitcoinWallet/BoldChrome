@@ -26,8 +26,13 @@ export const networkStore = writable<NetworkState>(initialState);
  */
 export async function initializeNetworkStore(): Promise<void> {
   const stored = await storage.get<'mainnet' | 'testnet' | 'testnet4'>('network');
+  const testnetVariant = await storage.get<'testnet' | 'testnet4'>('testnetApiVariant');
   // Normalize legacy 'testnet4' value to the canonical 'testnet'
   const network: Network = stored === 'testnet' || stored === 'testnet4' ? 'testnet' : 'mainnet';
+
+  if (testnetVariant === 'testnet' || testnetVariant === 'testnet4') {
+    blockchain.setTestnetVariant(testnetVariant);
+  }
 
   // Update blockchain service
   blockchain.setNetwork(network);

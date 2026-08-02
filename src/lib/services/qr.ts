@@ -313,7 +313,6 @@ class QRService {
    */
   async processScanedQR(qrText: string): Promise<{ type: QRDataType; data: any }> {
     try {
-      console.log('[QR] Processing scanned data:', qrText.substring(0, 100) + '...');
 
       // BIP-21 URI + Testnet auto-detect (bitcoin:<addr>?network=testnet or tb1/m/n/2 prefixes)
       const bip21Match = qrText.match(/^bitcoin:([^?]+)(\?.*)?$/i);
@@ -417,6 +416,40 @@ class QRService {
           return { type: 'public_key', data: pairingData };
         }
         
+        // Handle the new standardized PairingPayload (addresses/pubKeys as objects or flat strings)
+        if (qrData.version === '1.0' && qrData.network && (qrData.addresses || qrData.address)) {
+          console.log('[QR] Standardized PairingPayload detected (network-aware)');
+          const payloadNetwork =
+            qrData.network === 'mainnet'
+              ? 'mainnet'
+              : qrData.network === 'testnet4'
+                ? 'testnet4'
+                : 'testnet';
+          const normalizedNetwork = payloadNetwork === 'mainnet' ? 'mainnet' : 'testnet';
+          const selectedAddress =
+            typeof qrData.addresses === 'string'
+              ? qrData.addresses
+              : normalizedNetwork === 'testnet'
+                ? (qrData.addresses?.testnet || qrData.addresses?.testnet4)
+                : qrData.addresses?.mainnet;
+          const selectedPubKey =
+            normalizedNetwork === 'testnet'
+              ? (qrData.pubKeys?.testnet || qrData.pubKeys?.testnet4)
+              : qrData.pubKeys?.mainnet;
+          const pairingData = {
+            publicKey: selectedPubKey || qrData.pubKeys,
+            chainCode: undefined,
+            deviceId: 'mobile-wallet',
+            network: payloadNetwork,
+            address: selectedAddress,
+            addresses: qrData.addresses,
+            pubKeys: qrData.pubKeys,
+            fingerprint: qrData.fingerprint,
+          };
+          const processed = await this.processPairingData(pairingData);
+          return { type: 'pairing_response', data: processed };
+        }
+
         // Handle JSON without explicit type but with publicKey field (common mobile app format)
         if (qrData.publicKey) {
           console.log('[QR] JSON contains publicKey, treating as pairing response');
@@ -654,7 +687,6 @@ class QRService {
       }
 
       // Unknown format - but let's try to use it anyway if it looks like it might contain useful data
-      console.log('[QR] Unknown format, attempting generic parse');
       const preview = qrText && typeof qrText === 'string' ? qrText.toString().substring(0,200) : String(qrText);
       const len = qrText && typeof qrText === 'string' ? qrText.length : undefined;
       throw new Error(`Unrecognized QR code format. Preview (truncated): ${preview} ${len ? `(len=${len})` : ''}. Tried tolerant JSON recovery and other heuristics. Expected: pairing data (JSON with publicKey), raw public key (hex), Bitcoin address, or PSBT.`);
@@ -704,7 +736,6 @@ class QRService {
         }
 
         const body = await resp.json();
-        console.log('[QR] Relay lookup returned body:', body && (body.type || body.publicKey ? '[pairing payload]' : body));
         return body;
       } catch (err) {
         clearTimeout(timeout);

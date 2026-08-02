@@ -1,2 +1,5 @@
+allowBuilds:
+  '@swc/core': false
+  esbuild: false
 onlyBuiltDependencies:
   - esbuild

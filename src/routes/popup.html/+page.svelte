@@ -560,17 +560,6 @@
     };
   });
 
-  // When pairing sets the status to fetching, trigger an automatic refresh and show spinner
-  $: if (pairingStatus === "Fetching wallet data..." && !isRefreshing) {
-    (async () => {
-      try {
-        await fetchWalletDataAndHandleStatus();
-      } catch (err) {
-        // error already handled by helper
-      }
-    })();
-  }
-
   let showSend = false;
   let showReceive = false;
   let sendAmount = "";
@@ -908,6 +897,27 @@
     pairingStatus = "Enter the response from your mobile wallet";
   }
 
+  function inferPairingNetwork(payload: any): "mainnet" | "testnet" | null {
+    const declared = payload?.network;
+    if (declared === "mainnet") return "mainnet";
+    if (
+      declared === "testnet" ||
+      declared === "testnet4" ||
+      declared === "testnet3"
+    ) {
+      return "testnet";
+    }
+
+    const addr =
+      payload?.address ||
+      payload?.addresses?.testnet ||
+      payload?.addresses?.testnet4 ||
+      payload?.addresses?.mainnet;
+
+    if (typeof addr !== "string" || !addr) return null;
+    return /^tb1|^[mn2]/.test(addr) ? "testnet" : "mainnet";
+  }
+
   async function handleQRScanFromCamera(qrData: string) {
     // Hide scanner immediately by setting a temp step or loading step, keeping 4 for now until success
     // But logically we process it.
@@ -921,6 +931,13 @@
         pairingStatus = `Received pairing code: ${result.data.code}. Please export full pairing response.`;
         pairingStep = 5; // Go to manual input
         return;
+      }
+
+      // Ensure network state is switched before any refresh hits blockchain APIs.
+      const inferredNetwork = inferPairingNetwork(result?.data);
+      if (inferredNetwork) {
+        await setNetwork(inferredNetwork);
+        await tick();
       }
 
       // Refresh local wallet state
@@ -969,6 +986,11 @@
           }
         }
       } else {
+        const latestAfter = get(walletStore);
+        console.warn('[pairing] No publicKey after processScanedQR', {
+          publicKey: latestAfter.publicKey,
+          addresses: latestAfter.addresses?.length,
+        });
         pairingStatus = "Pairing response received but no key was stored";
         // Stay on scanner or go back? Go back to options
         pairingStep = 3;
@@ -994,7 +1016,14 @@
 
     try {
       pairingStatus = "Processing public key...";
-      await qr.processScanedQR(manualPublicKey.trim());
+      const result = await qr.processScanedQR(manualPublicKey.trim());
+
+      // Ensure network state is switched before any refresh hits blockchain APIs.
+      const inferredNetwork = inferPairingNetwork(result?.data);
+      if (inferredNetwork) {
+        await setNetwork(inferredNetwork);
+        await tick();
+      }
 
       // Refresh local wallet state
       await initializeWalletStore();
@@ -1606,26 +1635,31 @@
           />
           <span class="header-title-text">Set PIN</span>
         {:else if showMainApp}
-          <button
-            type="button"
-            class="header-price-btn"
-            on:click={openCurrencyModal}
-            title="Bitcoin price – tap to change currency"
-            aria-label="Bitcoin price: {btcPriceDisplay} {getCurrencySymbol(
-              selectedCurrency,
-            )}. Tap to change currency."
-          >
-            <img
-              src={bitcoinLogo}
-              alt=""
-              class="header-price-icon"
-              width="20"
-              height="20"
-            />
-            <span class="header-price-text"
-              >{btcPriceDisplay} {getCurrencySymbol(selectedCurrency)}</span
+          <div class="header-mainnet-testnet-wrap">
+            <button
+              type="button"
+              class="header-price-btn"
+              on:click={openCurrencyModal}
+              title="Bitcoin price – tap to change currency"
+              aria-label="Bitcoin price: {btcPriceDisplay} {getCurrencySymbol(
+                selectedCurrency,
+              )}. Tap to change currency."
             >
-          </button>
+              <img
+                src={bitcoinLogo}
+                alt=""
+                class="header-price-icon"
+                width="20"
+                height="20"
+              />
+              <span class="header-price-text"
+                >{btcPriceDisplay} {getCurrencySymbol(selectedCurrency)}</span
+              >
+            </button>
+            {#if $networkStore.isTestnet}
+              <span class="header-testnet-badge">TESTNET</span>
+            {/if}
+          </div>
         {:else}
           <img
             src={$themeName === "darkPolished" ? logoSmallDark : logoSmall}
@@ -4660,7 +4694,7 @@
     justify-content: center;
   }
 
-  /* Generic app header: fixed bar; logo and actions pinned left/right (override any div/block) */
+  /* Generic app header */
   .app-header {
     position: fixed !important;
     top: 0 !important;
@@ -4675,30 +4709,27 @@
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
     padding: 12px;
-    display: block !important; /* header is block; children are absolute */
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     overflow: visible; /* prevent any clipping of text ascenders/descenders */
     line-height: normal;
   }
   .app-header-left {
-    position: absolute !important;
-    left: 12px !important;
-    right: auto !important;
-    top: 50% !important;
-    transform: translateY(-50%);
     display: inline-flex !important;
     align-items: center;
     width: auto !important;
+    min-width: 0;
+    flex: 1 1 auto;
   }
   .app-header-right {
-    position: absolute !important;
-    left: auto !important;
-    right: 12px !important;
-    top: 50% !important;
-    transform: translateY(-50%);
     display: inline-flex !important;
     align-items: center;
     gap: 8px;
     width: auto !important;
+    margin-left: auto;
+    flex: 0 0 auto;
   }
   .header-logo {
     display: block;
@@ -4730,6 +4761,28 @@
       border-color 0.2s,
       box-shadow 0.2s;
   }
+  .header-mainnet-testnet-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .header-testnet-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, var(--color-border));
+    background: color-mix(in srgb, var(--color-error) 12%, transparent);
+    color: var(--color-error, #c22d2d);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    flex: 0 0 auto;
+  }
   .header-price-btn:hover {
     background: var(--glass-pane-bg-solid, var(--color-border));
     border-color: var(--color-primary);
@@ -4742,6 +4795,8 @@
   }
   .header-price-text {
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Content container below header — scrolls; reserve space for fixed header */

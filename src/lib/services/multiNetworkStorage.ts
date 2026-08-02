@@ -5,25 +5,37 @@
 
 export interface PairedWalletState {
   fingerprint: string;
+  activeNetwork: 'mainnet' | 'testnet';
   addresses: {
     mainnet?: string;
     testnet?: string;
+    testnet4?: string;
   };
   pubKeys: {
     mainnet?: string;
     testnet?: string;
+    testnet4?: string;
   };
   chainCodes: {
     mainnet?: string;
     testnet?: string;
+    testnet4?: string;
   };
+}
+
+function normalizeNetwork(network: 'mainnet' | 'testnet' | 'testnet4'): 'mainnet' | 'testnet' {
+  return network === 'mainnet' ? 'mainnet' : 'testnet';
+}
+
+function networkKeys(network: 'mainnet' | 'testnet'): Array<'mainnet' | 'testnet' | 'testnet4'> {
+  return network === 'mainnet' ? ['mainnet'] : ['testnet', 'testnet4'];
 }
 
 /**
  * Save or update paired wallet data for a specific network.
  */
 export async function savePairedWalletForNetwork(
-  network: 'mainnet' | 'testnet',
+  network: 'mainnet' | 'testnet' | 'testnet4',
   data: {
     address: string;
     publicKey: string;
@@ -33,20 +45,22 @@ export async function savePairedWalletForNetwork(
 ): Promise<void> {
   const existing = await getPairedWalletState();
   const fingerprint = data.fingerprint || existing?.fingerprint || 'unknown';
+  const normalizedNetwork = normalizeNetwork(network);
 
   const updated: PairedWalletState = {
     fingerprint,
+    activeNetwork: normalizedNetwork,
     addresses: {
       ...existing?.addresses,
-      [network]: data.address,
+      [normalizedNetwork]: data.address,
     },
     pubKeys: {
       ...existing?.pubKeys,
-      [network]: data.publicKey,
+      [normalizedNetwork]: data.publicKey,
     },
     chainCodes: {
       ...existing?.chainCodes,
-      [network]: data.chainCode,
+      [normalizedNetwork]: data.chainCode,
     },
   };
 
@@ -62,7 +76,30 @@ export async function getPairedWalletState(): Promise<PairedWalletState | null> 
       const raw = items.pairedWallets;
       if (typeof raw !== 'string' || raw.length === 0) return resolve(null);
       try {
-        resolve(JSON.parse(raw));
+        const parsed = JSON.parse(raw) as Partial<PairedWalletState>;
+        const normalized: PairedWalletState = {
+          fingerprint: parsed.fingerprint || 'unknown',
+          activeNetwork: parsed.activeNetwork === 'testnet' ? 'testnet' : 'mainnet',
+          addresses: {
+            mainnet: parsed.addresses?.mainnet,
+            testnet: parsed.addresses?.testnet || parsed.addresses?.testnet4,
+            testnet4: parsed.addresses?.testnet4,
+          },
+          pubKeys: {
+            mainnet: parsed.pubKeys?.mainnet,
+            testnet: parsed.pubKeys?.testnet || parsed.pubKeys?.testnet4,
+            testnet4: parsed.pubKeys?.testnet4,
+          },
+          chainCodes: {
+            mainnet: parsed.chainCodes?.mainnet,
+            testnet: parsed.chainCodes?.testnet || parsed.chainCodes?.testnet4,
+            testnet4: parsed.chainCodes?.testnet4,
+          },
+        };
+        if (!parsed.activeNetwork && normalized.addresses.testnet && !normalized.addresses.mainnet) {
+          normalized.activeNetwork = 'testnet';
+        }
+        resolve(normalized);
       } catch {
         resolve(null);
       }
@@ -78,7 +115,11 @@ export async function getActiveAddressForNetwork(
 ): Promise<string | null> {
   const state = await getPairedWalletState();
   if (!state) return null;
-  return state.addresses[network] || null;
+  for (const key of networkKeys(network)) {
+    const value = state.addresses[key];
+    if (value) return value;
+  }
+  return null;
 }
 
 /**
@@ -89,5 +130,9 @@ export async function getActivePubKeyForNetwork(
 ): Promise<string | null> {
   const state = await getPairedWalletState();
   if (!state) return null;
-  return state.pubKeys[network] || null;
+  for (const key of networkKeys(network)) {
+    const value = state.pubKeys[key];
+    if (value) return value;
+  }
+  return null;
 }

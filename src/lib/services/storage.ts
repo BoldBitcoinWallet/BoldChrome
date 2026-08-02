@@ -27,6 +27,8 @@ export interface StorageData {
   theme: 'light' | 'dark';
   /** Mempool API: undefined = not chosen (show preference after pairing), '' = default mempool.space, else custom mainnet URL */
   mempoolMainnetUrl?: string | null;
+  /** Testnet API variant routing: 'testnet' => /testnet/api, 'testnet4' => /testnet4/api */
+  testnetApiVariant?: 'testnet' | 'testnet4';
 
   // HD wallet state (gap-limit discovery results)
   hdState?: string; // JSON stringified HdState

@@ -119,6 +119,7 @@ export async function resetWallet() {
     'addresses',
     'hdState',
     'network',
+    'testnetApiVariant',
     'pairedDevices',
     'pinHash'
   ]);
@@ -152,9 +153,15 @@ export async function initializeWalletStore() {
   let chainCode = await storage.get<string>('chainCode');
 
   if (multi) {
-    address = multi.addresses[network] || address;
-    publicKey = multi.pubKeys[network] || publicKey;
-    chainCode = multi.chainCodes[network] || chainCode;
+    if (network === 'testnet') {
+      address = multi.addresses.testnet || multi.addresses.testnet4 || address;
+      publicKey = multi.pubKeys.testnet || multi.pubKeys.testnet4 || publicKey;
+      chainCode = multi.chainCodes.testnet || multi.chainCodes.testnet4 || chainCode;
+    } else {
+      address = multi.addresses.mainnet || address;
+      publicKey = multi.pubKeys.mainnet || publicKey;
+      chainCode = multi.chainCodes.mainnet || chainCode;
+    }
   }
 
   const addressesJson = await storage.get<string>('addresses');
@@ -312,88 +319,164 @@ export function setPairedDevices(devices: string[]) {
  * Supports both full pairing (with chain code) and simple pairing (just public key)
  */
 export async function updateWalletFromPairing(data: {
-  publicKey: string;
+  publicKey?: string;
   chainCode?: string;
   deviceId?: string;
-  network?: 'mainnet' | 'testnet';
+  network?: 'mainnet' | 'testnet' | 'testnet4';
   address?: string;
-  addresses?: DerivedAddress[];
+  addresses?: { mainnet?: string; testnet?: string; testnet4?: string };
+  pubKeys?: { mainnet?: string; testnet?: string; testnet4?: string };
+  fingerprint?: string;
   isRawKey?: boolean;
 }) {
-  // Validate data
-  if (!data.publicKey) {
-    throw new Error('No public key provided in pairing response');
+  // Support both legacy single-address format and the new standardized PairingPayload
+  const incomingNetwork = data.network || 'mainnet';
+  const normalizedIncomingNetwork: 'mainnet' | 'testnet' =
+    incomingNetwork === 'mainnet' ? 'mainnet' : 'testnet';
+
+  // Build a blank template if nothing exists yet (prevents null reference when merging)
+  let walletState = await getPairedWalletState();
+  if (!walletState) {
+    walletState = {
+      fingerprint: data.fingerprint || 'unknown',
+      activeNetwork: normalizedIncomingNetwork,
+      addresses: {},
+      pubKeys: {},
+      chainCodes: {},
+    };
   }
 
-  // Detect network from address prefix if not explicitly provided
-  let network: 'mainnet' | 'testnet' = data.network || 'mainnet';
-  const addr = data.address || (data.addresses && data.addresses[0]?.address);
-  if (!data.network && addr) {
-    network = /^tb1q|^tb1p|^[mn2]/.test(addr) ? 'testnet' : 'mainnet';
+  if (!walletState.activeNetwork) {
+    walletState.activeNetwork = normalizedIncomingNetwork;
   }
 
-  // Persist to multi-network storage (does not overwrite the other network)
-  await savePairedWalletForNetwork(network, {
-    address: addr || '',
-    publicKey: data.publicKey,
-    chainCode: data.chainCode || '',
-    fingerprint: undefined,
-  });
+  // Merge incoming structured fields (defensive for both object and flat-string shapes)
+  const addrField = data.addresses;
+  const pkField = data.pubKeys;
 
-  // Also keep legacy single-network fields for backward compatibility
-  await storage.set('publicKey', data.publicKey);
+  if (addrField && typeof addrField === 'object') {
+    if (addrField.mainnet) {
+      walletState.addresses.mainnet = addrField.mainnet;
+      walletState.pubKeys.mainnet = (pkField && typeof pkField === 'object' ? pkField.mainnet : undefined) || data.publicKey;
+    }
+    const testnetAddr = addrField.testnet || addrField.testnet4;
+    if (testnetAddr) {
+      walletState.addresses.testnet = testnetAddr;
+      walletState.addresses.testnet4 = addrField.testnet4 || testnetAddr;
+      const testnetPk = (pkField && typeof pkField === 'object'
+        ? (pkField.testnet || pkField.testnet4)
+        : undefined) || data.publicKey;
+      walletState.pubKeys.testnet = testnetPk;
+      walletState.pubKeys.testnet4 = (pkField && typeof pkField === 'object' ? pkField.testnet4 : undefined) || testnetPk;
+    }
+  } else if (typeof addrField === 'string') {
+    // Compatibility path: mobile is still sending flat strings
+    if (normalizedIncomingNetwork === 'testnet' || /^tb1|^[mn2]/.test(addrField)) {
+      walletState.addresses.testnet = addrField;
+      walletState.addresses.testnet4 = walletState.addresses.testnet4 || addrField;
+      const testPk = typeof pkField === 'string' ? pkField : data.publicKey;
+      walletState.pubKeys.testnet = testPk;
+      walletState.pubKeys.testnet4 = walletState.pubKeys.testnet4 || testPk;
+    } else {
+      walletState.addresses.mainnet = addrField;
+      walletState.pubKeys.mainnet = typeof pkField === 'string' ? pkField : data.publicKey;
+    }
+  }
+
+  // Fallback: single address / publicKey at root level (legacy mobile payload)
+  const singleAddr = data.address;
+  const singlePk = data.publicKey;
+  if (singleAddr && !data.addresses) {
+    if (normalizedIncomingNetwork === 'testnet' || /^tb1|^[mn2]/.test(singleAddr)) {
+      walletState.addresses.testnet = singleAddr;
+      walletState.addresses.testnet4 = walletState.addresses.testnet4 || singleAddr;
+      walletState.pubKeys.testnet = singlePk;
+      walletState.pubKeys.testnet4 = walletState.pubKeys.testnet4 || singlePk;
+    } else {
+      walletState.addresses.mainnet = singleAddr;
+      walletState.pubKeys.mainnet = singlePk;
+    }
+  }
+
+  // Validate testnet address when payload claims testnet
+  if (normalizedIncomingNetwork === 'testnet' && !walletState.addresses.testnet && !walletState.addresses.testnet4) {
+    throw new Error('Payload missing Testnet address (tb1...)');
+  }
+
+  walletState.activeNetwork = normalizedIncomingNetwork;
+
+  // Persist merged state
+  await chrome.storage.local.set({ pairedWallets: JSON.stringify(walletState) });
+
+  // Determine active network for UI / store
+  const activeNetwork: 'mainnet' | 'testnet' = normalizedIncomingNetwork;
+
+  // Keep legacy single-network keys for backward compatibility
+  const activeAddr =
+    activeNetwork === 'testnet'
+      ? (walletState.addresses.testnet || walletState.addresses.testnet4)
+      : walletState.addresses.mainnet;
+  const activePk =
+    activeNetwork === 'testnet'
+      ? (walletState.pubKeys.testnet || walletState.pubKeys.testnet4)
+      : walletState.pubKeys.mainnet;
+
+  if (activePk) await storage.set('publicKey', activePk);
   if (data.chainCode) await storage.set('chainCode', data.chainCode);
-  await storage.set('network', network);
-
-  // If Testnet address was provided, ensure the network store is also updated
-  if (network === 'testnet') {
-    await setNetworkStore('testnet');
+  // Persist active network for legacy single-network consumers.
+  const legacyNetwork = activeNetwork;
+  await storage.set('network', legacyNetwork);
+  if (legacyNetwork === 'testnet') {
+    const variant: 'testnet' | 'testnet4' = incomingNetwork === 'testnet4' ? 'testnet4' : 'testnet';
+    await storage.set('testnetApiVariant', variant);
+    blockchain.setTestnetVariant(variant);
   }
+
+  // Switch the reactive network store so balance refreshes on the correct chain
+  await setNetworkStore(activeNetwork);
 
   // Add device to paired devices list
   const deviceId = data.deviceId || 'mobile-wallet';
   const pairedDevices = [deviceId];
   await storage.set('pairedDevices', JSON.stringify(pairedDevices));
 
-  // Update wallet store
+  // Update wallet store (use active address / pubkey)
   walletStore.update(state => ({
     ...state,
-    publicKey: data.publicKey,
+    publicKey: activePk || data.publicKey,
     chainCode: data.chainCode,
-    network,
+    network: legacyNetwork,
     pairedDevices
   }));
 
-  console.log('[Wallet] Paired with device:', deviceId, 'network:', network);
-  
-  // If addresses were provided directly, use them
-  if (data.addresses && data.addresses.length > 0) {
-    await updateAddresses(data.addresses);
-    if (data.address) {
-      await setAddress(data.address);
-    } else {
-      await setAddress(data.addresses[0].address);
-    }
-    return;
-  }
-
-  // If a single address was provided
-  if (data.address) {
+  // If a single address was provided (legacy path)
+  if (activeAddr) {
     const addr: DerivedAddress = {
-      address: data.address,
-      path: "m/84'/0'/0'/0/0",
+      address: activeAddr,
+      path: activeNetwork === 'testnet' ? "m/84'/1'/0'/0/0" : "m/84'/0'/0'/0/0",
       index: 0,
-      type: data.address.startsWith('bc1') ? 'segwit-native' : 
-            data.address.startsWith('3') ? 'segwit-nested' : 'legacy'
+      type: activeAddr.startsWith('bc1') || activeAddr.startsWith('tb1')
+        ? 'segwit-native'
+        : activeAddr.startsWith('3') || activeAddr.startsWith('2')
+        ? 'segwit-nested'
+        : 'legacy',
     };
     await updateAddresses([addr]);
-    await setAddress(data.address);
+    await setAddress(activeAddr);
     return;
   }
 
   // If we have chain code, derive addresses
   if (data.chainCode) {
     await deriveInitialAddresses();
+  } else if (activePk) {
+    console.warn('[Wallet] No chainCode in payload – attempting limited discovery from fingerprint only');
+    // We still have a pubKey; try a minimal derivation so the UI shows something useful
+    try {
+      await deriveInitialAddresses();
+    } catch (e) {
+      console.log('[Wallet] deriveInitialAddresses failed (expected without chainCode)');
+    }
   } else {
     console.log('[Wallet] No chain code provided - limited functionality (watch-only with provided addresses)');
   }
@@ -407,7 +490,7 @@ export async function updateWalletFromPairing(data: {
 export async function deriveInitialAddresses() {
   const publicKey = await storage.get<string>('publicKey');
   const chainCode = await storage.get<string>('chainCode');
-  const network = await storage.get<string>('network') as 'mainnet' | 'testnet' || 'mainnet';
+  const network = (await storage.get<string>('network') as 'mainnet' | 'testnet') || 'mainnet';
 
   if (!publicKey || !chainCode) {
     console.error('[Wallet] Cannot derive addresses: missing public key or chain code');
@@ -415,7 +498,6 @@ export async function deriveInitialAddresses() {
   }
 
   try {
-    console.log('[Wallet] Deriving 3 addresses (first derivation: native segwit, nested segwit, legacy)...');
 
     const derived = hdWallet.deriveAllTypes(
       { publicKey, chainCode, network },
@@ -428,7 +510,6 @@ export async function deriveInitialAddresses() {
       ...derived.legacy.map(addr => ({ ...addr, type: 'legacy' as const, chain: 'receive' as const }))
     ];
 
-    console.log('[Wallet] Derived', addresses.length, 'addresses');
     await updateAddresses(addresses);
 
     if (derived.segwitNative.length > 0) {
@@ -472,8 +553,6 @@ export async function runHdDiscovery(force = false, overrideAddressType?: 'segwi
   }
   const config = { publicKey, chainCode, network };
 
-  console.log('[Wallet] Running HD discovery for', addressType);
-
   const getStats = async (address: string) => {
     const stats = await blockchain.getAddressStats(address);
     return { tx_count: stats.chain_stats.tx_count + stats.mempool_stats.tx_count };
@@ -514,7 +593,6 @@ export async function runHdDiscovery(force = false, overrideAddressType?: 'segwi
   }
 
   walletStore.update(s => ({ ...s, hdState: newHdState }));
-  console.log('[Wallet] HD discovery complete:', newHdState);
 
   // Re-aggregate balance/txs/UTXOs now that the full address set is known
   await refreshWalletData();

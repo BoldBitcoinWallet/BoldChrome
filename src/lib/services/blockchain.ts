@@ -90,7 +90,8 @@ export interface RecommendedFees {
 }
 
 const DEFAULT_MAINNET_API = DEFAULT_MAINNET_MEMPOOL_API_BASE;
-const DEFAULT_TESTNET_API = 'https://mempool.space/testnet4/api';
+const DEFAULT_TESTNET_API_TESTNET = 'https://mempool.space/testnet/api';
+const DEFAULT_TESTNET_API_TESTNET4 = 'https://mempool.space/testnet4/api';
 const FETCH_TIMEOUT_MS = 5000;
 
 /** Minimum pause between uncached Esplora address calls (stats / utxo / txs). */
@@ -98,6 +99,14 @@ const ESPLORA_INTER_REQUEST_GAP_MS = 320;
 
 const RATE_LIMIT_DEFAULT_BACKOFF_MS = 5_000;
 const MAX_429_RETRIES = 2;
+
+function inferAddressNetwork(address: string): 'mainnet' | 'testnet' | 'unknown' {
+  const a = (address || '').trim().toLowerCase();
+  if (!a) return 'unknown';
+  if (a.startsWith('bc1') || a.startsWith('1') || a.startsWith('3')) return 'mainnet';
+  if (a.startsWith('tb1') || a.startsWith('m') || a.startsWith('n') || a.startsWith('2')) return 'testnet';
+  return 'unknown';
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -115,7 +124,8 @@ function userFacingHttpError(status: number, apiKind: string): string {
 
 class BlockchainService {
   private baseUrl: string = DEFAULT_MAINNET_API;
-  private testnetUrl = DEFAULT_TESTNET_API;
+  private testnetUrl = DEFAULT_TESTNET_API_TESTNET4;
+  private testnetVariant: 'testnet' | 'testnet4' = 'testnet4';
   private network: 'mainnet' | 'testnet' = 'mainnet';
 
   private exploraConcurrencyChain: Promise<void> = Promise.resolve();
@@ -218,6 +228,16 @@ class BlockchainService {
     console.log(`[Blockchain] Network set to ${network}`);
   }
 
+  setTestnetVariant(variant: 'testnet' | 'testnet4'): void {
+    this.testnetVariant = variant;
+    this.testnetUrl =
+      variant === 'testnet4'
+        ? DEFAULT_TESTNET_API_TESTNET4
+        : DEFAULT_TESTNET_API_TESTNET;
+    this.clearCache();
+    console.log('[Blockchain] Testnet API variant set to', variant, this.testnetUrl);
+  }
+
   setMempoolMainnet(url: string | null | undefined): void {
     if (url && url.trim() !== '') {
       this.baseUrl = url.trim().replace(/\/+$/, '').replace(/\/api\/?$/i, '') + '/api';
@@ -243,7 +263,18 @@ class BlockchainService {
     return this.network === 'testnet' ? this.testnetUrl : this.baseUrl;
   }
 
+  private assertAddressMatchesActiveNetwork(address: string, operation: string): void {
+    const inferred = inferAddressNetwork(address);
+    if (inferred === 'unknown') return;
+    if (inferred !== this.network) {
+      throw new Error(
+        `Address/network mismatch during ${operation}: got ${inferred} address while active network is ${this.network}.`,
+      );
+    }
+  }
+
   async getAddressStats(address: string): Promise<AddressStats> {
+    this.assertAddressMatchesActiveNetwork(address, 'getAddressStats');
     console.log('[Blockchain] Fetching address stats:', address);
     const url = `${this.getBaseUrl()}/address/${address}`;
     try {
@@ -277,6 +308,7 @@ class BlockchainService {
   }
 
   async getUTXOs(address: string): Promise<UTXO[]> {
+    this.assertAddressMatchesActiveNetwork(address, 'getUTXOs');
     console.log('[Blockchain] Fetching UTXOs for:', address);
     const url = `${this.getBaseUrl()}/address/${address}/utxo`;
     try {
@@ -291,6 +323,7 @@ class BlockchainService {
     address: string,
     afterTxid?: string,
   ): Promise<Transaction[]> {
+    this.assertAddressMatchesActiveNetwork(address, 'getTransactions');
     console.log('[Blockchain] Fetching transactions for:', address);
 
     let url = `${this.getBaseUrl()}/address/${address}/txs`;
