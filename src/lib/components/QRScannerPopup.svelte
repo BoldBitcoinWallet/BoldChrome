@@ -79,6 +79,16 @@
   
   let videoObserver: MutationObserver | null = null;
 
+  async function waitForScannerHost(maxAttempts = 6): Promise<HTMLElement | null> {
+    for (let i = 0; i < maxAttempts; i++) {
+      await tick();
+      const host = document.getElementById('qr-reader');
+      if (host) return host;
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }
+    return null;
+  }
+
   async function stopScanner() {
     if (!scanner) return;
 
@@ -113,7 +123,13 @@
         await stopScanner();
       }
 
-      scanner = new Html5Qrcode("qr-reader");
+      const scannerHost = await waitForScannerHost();
+      if (!scannerHost) {
+        console.warn('Scanner host not ready yet; skipping start attempt');
+        return;
+      }
+
+      scanner = new Html5Qrcode(scannerHost.id);
 
       const config = {
         fps: 15,
@@ -200,6 +216,11 @@
       }
 
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (/qr-reader not found/i.test(errMsg)) {
+        console.warn('Scanner start delayed: qr-reader host missing during mount transition');
+        return;
+      }
       console.error('Scanner start error:', err);
       hasError = true;
       scannerStatus = 'Unable to start camera';

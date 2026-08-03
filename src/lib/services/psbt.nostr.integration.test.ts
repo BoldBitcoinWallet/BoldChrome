@@ -15,6 +15,9 @@ vi.mock('./storage', () => ({
 vi.mock('./nostrMessaging', () => ({
   nostrMessaging: {
     connect: vi.fn().mockResolvedValue(undefined),
+    sendNip46Connect: vi.fn().mockResolvedValue('req-connect-1'),
+    sendNip46SignEvent: vi.fn().mockResolvedValue('req-sign-1'),
+    waitForNip46Response: vi.fn().mockRejectedValue(new Error('NIP-46 not available')),
     sendCoSignRequest: vi.fn().mockResolvedValue(undefined),
     waitForCoSignResponse: vi.fn(),
     psbtBase64ToHex: vi.fn().mockReturnValue('70736274'),
@@ -137,6 +140,38 @@ describe('PSBT Nostr integration', () => {
       const session = psbt.getSession();
       expect(session?.nostrState).toBe('delivered');
       expect(session?.status).toBe('signed');
+      expect(broadcastSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('uses NIP-46 happy path and skips legacy COSIGN flow when response is successful', async () => {
+    vi.mocked(nostrMessaging.waitForNip46Response).mockResolvedValueOnce({
+      response: {
+        id: 'req-sign-1',
+        result: {
+          signedPsbtBase64: 'c2lnbmVkLXBzYnQ=',
+        },
+      },
+      senderNpub: 'npub1peer',
+      senderPubHex: 'c'.repeat(64),
+      relayUrl: 'wss://relay.damus.io',
+      eventId: 'evt-nip46-1',
+    } as any);
+
+    const broadcastSpy = vi
+      .spyOn(psbt, 'broadcastTransaction')
+      .mockResolvedValueOnce('txid-from-nip46');
+
+    await psbt.requestSigning('cHNidP8BAA==');
+
+    await vi.waitFor(() => {
+      const session = psbt.getSession();
+      expect(session?.nostrState).toBe('delivered');
+      expect(session?.status).toBe('signed');
+      expect(nostrMessaging.sendNip46Connect).toHaveBeenCalledTimes(1);
+      expect(nostrMessaging.sendNip46SignEvent).toHaveBeenCalledTimes(1);
+      expect(nostrMessaging.sendCoSignRequest).not.toHaveBeenCalled();
+      expect(nostrMessaging.waitForCoSignResponse).not.toHaveBeenCalled();
       expect(broadcastSpy).toHaveBeenCalledTimes(1);
     });
   });

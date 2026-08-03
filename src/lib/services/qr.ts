@@ -433,15 +433,19 @@ class QRService {
                 ? (qrData.addresses?.testnet || qrData.addresses?.testnet4)
                 : qrData.addresses?.mainnet;
           const selectedPubKey =
-            normalizedNetwork === 'testnet'
+            qrData.publicKey ||
+            (normalizedNetwork === 'testnet'
               ? (qrData.pubKeys?.testnet || qrData.pubKeys?.testnet4)
-              : qrData.pubKeys?.mainnet;
+              : qrData.pubKeys?.mainnet);
+          const selectedAddressOrFlat = selectedAddress || qrData.address;
+          const selectedPubKeyOrFlat =
+            selectedPubKey || (typeof qrData.pubKeys === 'string' ? qrData.pubKeys : undefined);
           const pairingData = {
-            publicKey: selectedPubKey || qrData.pubKeys,
-            chainCode: undefined,
-            deviceId: 'mobile-wallet',
+            publicKey: selectedPubKeyOrFlat,
+            chainCode: qrData.chainCode,
+            deviceId: qrData.deviceId || 'mobile-wallet',
             network: payloadNetwork,
-            address: selectedAddress,
+            address: selectedAddressOrFlat,
             addresses: qrData.addresses,
             pubKeys: qrData.pubKeys,
             fingerprint: qrData.fingerprint,

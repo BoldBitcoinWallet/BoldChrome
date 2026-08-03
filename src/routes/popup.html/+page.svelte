@@ -668,6 +668,52 @@
     return 0;
   }
 
+  function inferAddressNetwork(
+    address: string,
+  ): "mainnet" | "testnet" | null {
+    const a = (address || "").trim().toLowerCase();
+    if (!a) return null;
+    if (a.startsWith("bc1") || a.startsWith("1") || a.startsWith("3")) {
+      return "mainnet";
+    }
+    if (
+      a.startsWith("tb1") ||
+      a.startsWith("m") ||
+      a.startsWith("n") ||
+      a.startsWith("2")
+    ) {
+      return "testnet";
+    }
+    return null;
+  }
+
+  function resolveNetworkAddressCandidate(
+    wallet: {
+      network?: "mainnet" | "testnet";
+      address?: string;
+      addresses?: Array<{ address: string }>;
+    },
+  ): { network: "mainnet" | "testnet"; address: string } {
+    const fallbackNetwork = wallet.network || "mainnet";
+    const currentAddress = wallet.address || "";
+    const currentAddressNetwork = inferAddressNetwork(currentAddress);
+    const resolvedNetwork = currentAddressNetwork || fallbackNetwork;
+
+    if (currentAddress && currentAddressNetwork === resolvedNetwork) {
+      return { network: resolvedNetwork, address: currentAddress };
+    }
+
+    const compatible = (wallet.addresses || []).find(
+      a => inferAddressNetwork(a.address) === resolvedNetwork,
+    );
+
+    if (compatible?.address) {
+      return { network: resolvedNetwork, address: compatible.address };
+    }
+
+    return { network: fallbackNetwork, address: currentAddress };
+  }
+
   function getSendFeeRate(): number {
     if (!sendFeeEstimates) return 0;
 
@@ -1261,9 +1307,13 @@
     sendFeeEstimatesLoading = true;
     showSend = true;
     const wallet = get(walletStore);
-    const address = wallet.address;
-    const network = wallet.network || "mainnet";
+    const candidate = resolveNetworkAddressCandidate(wallet);
+    const address = candidate.address;
+    const network = candidate.network;
     try {
+      if (wallet.network !== network) {
+        await setNetwork(network);
+      }
       if (address) {
         blockchain.setNetwork(network);
         const [fees, utxos] = await Promise.all([
@@ -1332,10 +1382,17 @@
     try {
       const amountSats = Math.round(amount * 1e8);
       const wallet = get(walletStore);
-      const network = wallet.network || "mainnet";
+      const candidate = resolveNetworkAddressCandidate(wallet);
+      const network = candidate.network;
+
+      if (wallet.network !== network) {
+        await setNetwork(network);
+      }
 
       // Use aggregated tagged UTXOs from HD wallet store
-      const taggedUtxos = wallet.utxos || [];
+      const taggedUtxos = (wallet.utxos || []).filter(
+        u => inferAddressNetwork(u.address) === network,
+      );
       if (taggedUtxos.length === 0) {
         throw new Error("No UTXOs available for spending");
       }

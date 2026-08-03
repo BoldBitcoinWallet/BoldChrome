@@ -94,6 +94,14 @@ const DEFAULT_TESTNET_API_TESTNET = 'https://mempool.space/testnet/api';
 const DEFAULT_TESTNET_API_TESTNET4 = 'https://mempool.space/testnet4/api';
 const FETCH_TIMEOUT_MS = 5000;
 
+const FALLBACK_RECOMMENDED_FEES: RecommendedFees = {
+  fastestFee: 8,
+  halfHourFee: 4,
+  hourFee: 2,
+  economyFee: 1,
+  minimumFee: 1,
+};
+
 /** Minimum pause between uncached Esplora address calls (stats / utxo / txs). */
 const ESPLORA_INTER_REQUEST_GAP_MS = 320;
 
@@ -263,6 +271,16 @@ class BlockchainService {
     return this.network === 'testnet' ? this.testnetUrl : this.baseUrl;
   }
 
+  private async fetchRecommendedFeesFromUrl(url: string): Promise<RecommendedFees> {
+    const res = await mempoolClient.get<RecommendedFees>(url, {
+      timeoutMs: FETCH_TIMEOUT_MS,
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return res.data;
+  }
+
   private assertAddressMatchesActiveNetwork(address: string, operation: string): void {
     const inferred = inferAddressNetwork(address);
     if (inferred === 'unknown') return;
@@ -378,17 +396,28 @@ class BlockchainService {
     console.log('[Blockchain] Fetching fee estimates');
     const url = `${this.getBaseUrl()}/v1/fees/recommended`;
     try {
-      const res = await mempoolClient.get<RecommendedFees>(url, {
-        timeoutMs: FETCH_TIMEOUT_MS,
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      console.log('[Blockchain] Fee estimates:', res.data);
-      return res.data;
+      const fees = await this.fetchRecommendedFeesFromUrl(url);
+      console.log('[Blockchain] Fee estimates:', fees);
+      return fees;
     } catch (error) {
       console.error('[Blockchain] Error fetching fee estimates:', error);
-      throw error;
+      if (this.network === 'testnet') {
+        const alternateBase =
+          this.testnetVariant === 'testnet4'
+            ? DEFAULT_TESTNET_API_TESTNET
+            : DEFAULT_TESTNET_API_TESTNET4;
+        const alternateUrl = `${alternateBase}/v1/fees/recommended`;
+        try {
+          const altFees = await this.fetchRecommendedFeesFromUrl(alternateUrl);
+          console.warn('[Blockchain] Fee estimates recovered via alternate testnet API:', alternateBase);
+          return altFees;
+        } catch (altError) {
+          console.warn('[Blockchain] Alternate testnet fee endpoint also failed:', altError);
+        }
+      }
+
+      console.warn('[Blockchain] Using fallback fee estimates due to upstream error');
+      return { ...FALLBACK_RECOMMENDED_FEES };
     }
   }
 

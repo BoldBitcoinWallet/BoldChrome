@@ -236,6 +236,9 @@ export interface CreatePsbtParams {
   feeRate?: number; // sats per vByte
 }
 
+// Keep legacy fallback enabled during rollout; set false to enforce strict NIP-46.
+const ENABLE_LEGACY_COSIGN_FALLBACK = true;
+
 class PsbtService {
   private currentSession = writable<PsbtSession | null>(null);
   public session = { subscribe: this.currentSession.subscribe };
@@ -431,33 +434,82 @@ class PsbtService {
       };
 
       const senderFingerprint = keyshareFingerprint(wallet.publicKey);
-      await nostrMessaging.sendCoSignRequest(
-        recipientNpub,
-        senderFingerprint,
-        'mobile-wallet',
-        payload,
-      );
+      const nip46Secret = `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
+      const requestId = `nip46-sign-${txId}-${Date.now()}`;
 
-      const incoming = await nostrMessaging.waitForCoSignResponse(txId, 45000);
-      const response = incoming.envelope.payload as CoSignResponsePayload;
-      if (!response.approved) {
-        this.currentSession.update(s =>
-          s
-            ? {
-                ...s,
-                nostrState: 'failed',
-                error: response.reason || 'Peer rejected co-sign request over Nostr',
-              }
-            : null,
+      let signedPsbtBase64 = '';
+
+      try {
+        await nostrMessaging.sendNip46Connect(recipientNpub, nip46Secret, ['sign_event']);
+
+        const signEventPayload = {
+          kind: 24133,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ['x', 'bold-nip46-v1'],
+            ['txid', txId],
+            ['psbt_base64', psbtBase64],
+            ['psbt', payload.psbtHex],
+          ],
+          content: JSON.stringify(payload),
+        };
+
+        await nostrMessaging.sendNip46SignEvent(
+          recipientNpub,
+          signEventPayload,
+          nip46Secret,
+          requestId,
         );
-        return;
-      }
 
-      const signedPsbtBase64 = response.signedPsbtBase64
-        ? response.signedPsbtBase64
-        : response.signedPsbtHex
-        ? nostrMessaging.psbtHexToBase64(response.signedPsbtHex)
-        : '';
+        const incomingNip46 = await nostrMessaging.waitForNip46Response(requestId, 45000);
+        if (incomingNip46.response.error) {
+          throw new Error(incomingNip46.response.error);
+        }
+
+        const result = incomingNip46.response.result;
+        if (result && typeof result === 'object') {
+          const r = result as { signedPsbtBase64?: string; signedPsbtHex?: string };
+          signedPsbtBase64 =
+            (r.signedPsbtBase64 || '').trim() ||
+            (r.signedPsbtHex ? nostrMessaging.psbtHexToBase64(r.signedPsbtHex) : '');
+        } else if (typeof result === 'string') {
+          signedPsbtBase64 = result;
+        }
+      } catch (nip46Err) {
+        console.warn('[PSBT] NIP-46 path failed, falling back to legacy flow:', nip46Err);
+
+        if (!ENABLE_LEGACY_COSIGN_FALLBACK) {
+          throw nip46Err;
+        }
+
+        await nostrMessaging.sendCoSignRequest(
+          recipientNpub,
+          senderFingerprint,
+          'mobile-wallet',
+          payload,
+        );
+
+        const incoming = await nostrMessaging.waitForCoSignResponse(txId, 45000);
+        const response = incoming.envelope.payload as CoSignResponsePayload;
+        if (!response.approved) {
+          this.currentSession.update(s =>
+            s
+              ? {
+                  ...s,
+                  nostrState: 'failed',
+                  error: response.reason || 'Peer rejected co-sign request over Nostr',
+                }
+              : null,
+          );
+          return;
+        }
+
+        signedPsbtBase64 = response.signedPsbtBase64
+          ? response.signedPsbtBase64
+          : response.signedPsbtHex
+          ? nostrMessaging.psbtHexToBase64(response.signedPsbtHex)
+          : '';
+      }
 
       if (!signedPsbtBase64) {
         this.currentSession.update(s =>

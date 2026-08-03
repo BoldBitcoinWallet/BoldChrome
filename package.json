@@ -13,7 +13,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"verify": "node verify-setup.cjs",
-		"test": "vitest run"
+		"test": "vitest run",
+		"nip46:live": "node scripts/nip46-cosign-live.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",
