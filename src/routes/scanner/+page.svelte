@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { Html5Qrcode } from 'html5-qrcode';
 
 	let scanner: Html5Qrcode | null = null;
@@ -8,13 +8,29 @@
 	let isScanning = false;
 	let isStarted = false;
 
+	async function waitForScannerHost(maxAttempts = 8): Promise<HTMLElement | null> {
+		for (let i = 0; i < maxAttempts; i++) {
+			await tick();
+			const host = document.getElementById('qr-reader');
+			if (host) return host;
+			await new Promise(resolve => setTimeout(resolve, 40));
+		}
+		return null;
+	}
+
 	async function startScanner() {
 		try {
 			hasError = false;
 			isStarted = true;
 			scannerStatus = 'Requesting camera access...';
 
-			scanner = new Html5Qrcode('qr-reader');
+			await tick();
+			const scannerHost = await waitForScannerHost();
+			if (!scannerHost) {
+				throw new Error('HTML Element with id=qr-reader not found');
+			}
+
+			scanner = new Html5Qrcode(scannerHost.id);
 
 			const config = {
 				fps: 10,

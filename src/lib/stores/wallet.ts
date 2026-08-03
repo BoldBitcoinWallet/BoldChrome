@@ -333,6 +333,38 @@ export async function updateWalletFromPairing(data: {
   nostr_npub?: string;
   isRawKey?: boolean;
 }) {
+  const normalizedPublicKey =
+    data.publicKey ||
+    ((data as any).pubKey as string | undefined) ||
+    ((data as any).pk as string | undefined) ||
+    ((data as any).pub_key as string | undefined);
+  const normalizedChainCode =
+    data.chainCode ||
+    ((data as any).chain_code as string | undefined) ||
+    ((data as any).cc as string | undefined) ||
+    ((data as any).chainCodeHex as string | undefined) ||
+    ((data as any).chain_code_hex as string | undefined);
+  const normalizedAddresses =
+    data.addresses ?? ((data as any).addrs as { mainnet?: string; testnet?: string; testnet4?: string } | string | undefined);
+  const normalizedPubKeys =
+    data.pubKeys ?? ((data as any).pub_keys as { mainnet?: string; testnet?: string; testnet4?: string } | string | undefined);
+
+  const normalizedData = {
+    ...data,
+    publicKey: normalizedPublicKey,
+    chainCode: normalizedChainCode,
+    addresses: normalizedAddresses,
+    pubKeys: normalizedPubKeys,
+  };
+
+  console.warn('[PAIRING-DIAG] updateWalletFromPairing input', {
+    network: normalizedData.network,
+    hasPublicKey: !!normalizedData.publicKey,
+    hasChainCode: !!normalizedData.chainCode,
+    hasAddress: !!normalizedData.address,
+    hasAddressesObject: !!(normalizedData.addresses && typeof normalizedData.addresses === 'object'),
+  });
+
   const inferAddressNetwork = (address: string): 'mainnet' | 'testnet' | 'unknown' => {
     const a = (address || '').trim().toLowerCase();
     if (!a) return 'unknown';
@@ -357,13 +389,13 @@ export async function updateWalletFromPairing(data: {
 
   // Support both legacy single-address format and the new standardized PairingPayload.
   // If network is missing, infer it from provided addresses.
-  const incomingNetwork = data.network;
+  const incomingNetwork = normalizedData.network;
   const addressesObj =
-    data.addresses && typeof data.addresses === 'object'
-      ? data.addresses
+    normalizedData.addresses && typeof normalizedData.addresses === 'object'
+      ? normalizedData.addresses
       : undefined;
   const candidateAddresses = [
-    data.address,
+    normalizedData.address,
     addressesObj?.mainnet,
     addressesObj?.testnet,
     addressesObj?.testnet4,
@@ -371,7 +403,7 @@ export async function updateWalletFromPairing(data: {
   const hasMainnetCandidate = candidateAddresses.some(a => inferAddressNetwork(a) === 'mainnet');
   const hasTestnetCandidate = candidateAddresses.some(a => inferAddressNetwork(a) === 'testnet');
 
-  const normalizedIncomingNetwork: 'mainnet' | 'testnet' =
+  let normalizedIncomingNetwork: 'mainnet' | 'testnet' =
     incomingNetwork === 'mainnet'
       ? 'mainnet'
       : incomingNetwork === 'testnet' || incomingNetwork === 'testnet4'
@@ -384,7 +416,7 @@ export async function updateWalletFromPairing(data: {
   let walletState = await getPairedWalletState();
   if (!walletState) {
     walletState = {
-      fingerprint: data.fingerprint || 'unknown',
+      fingerprint: normalizedData.fingerprint || 'unknown',
       activeNetwork: normalizedIncomingNetwork,
       addresses: {},
       pubKeys: {},
@@ -397,14 +429,14 @@ export async function updateWalletFromPairing(data: {
   }
 
   // Merge incoming structured fields (defensive for both object and flat-string shapes)
-  const addrField = data.addresses;
-  const pkField = data.pubKeys;
+  const addrField = normalizedData.addresses;
+  const pkField = normalizedData.pubKeys;
 
   if (addrField && typeof addrField === 'object') {
     const mainnetAddr = pickAddressForNetwork('mainnet', addrField.mainnet);
     if (mainnetAddr) {
       walletState.addresses.mainnet = mainnetAddr;
-      walletState.pubKeys.mainnet = (pkField && typeof pkField === 'object' ? pkField.mainnet : undefined) || data.publicKey;
+      walletState.pubKeys.mainnet = (pkField && typeof pkField === 'object' ? pkField.mainnet : undefined) || normalizedData.publicKey;
     }
     const testnetAddr =
       pickAddressForNetwork('testnet', addrField.testnet) ||
@@ -414,7 +446,7 @@ export async function updateWalletFromPairing(data: {
       walletState.addresses.testnet4 = pickAddressForNetwork('testnet', addrField.testnet4) || testnetAddr;
       const testnetPk = (pkField && typeof pkField === 'object'
         ? (pkField.testnet || pkField.testnet4)
-        : undefined) || data.publicKey;
+        : undefined) || normalizedData.publicKey;
       walletState.pubKeys.testnet = testnetPk;
       walletState.pubKeys.testnet4 = (pkField && typeof pkField === 'object' ? pkField.testnet4 : undefined) || testnetPk;
     }
@@ -424,19 +456,19 @@ export async function updateWalletFromPairing(data: {
     if (inferred === 'testnet' || (inferred === 'unknown' && normalizedIncomingNetwork === 'testnet')) {
       walletState.addresses.testnet = addrField.trim();
       walletState.addresses.testnet4 = walletState.addresses.testnet4 || addrField.trim();
-      const testPk = typeof pkField === 'string' ? pkField : data.publicKey;
+      const testPk = typeof pkField === 'string' ? pkField : normalizedData.publicKey;
       walletState.pubKeys.testnet = testPk;
       walletState.pubKeys.testnet4 = walletState.pubKeys.testnet4 || testPk;
     } else if (inferred === 'mainnet' || (inferred === 'unknown' && normalizedIncomingNetwork === 'mainnet')) {
       walletState.addresses.mainnet = addrField.trim();
-      walletState.pubKeys.mainnet = typeof pkField === 'string' ? pkField : data.publicKey;
+        walletState.pubKeys.mainnet = typeof pkField === 'string' ? pkField : normalizedData.publicKey;
     }
   }
 
   // Fallback: single address / publicKey at root level (legacy mobile payload)
-  const singleAddr = data.address;
-  const singlePk = data.publicKey;
-  if (singleAddr && !data.addresses) {
+  const singleAddr = normalizedData.address;
+  const singlePk = normalizedData.publicKey;
+  if (singleAddr && !normalizedData.addresses) {
     const inferred = inferAddressNetwork(singleAddr);
     if (inferred === 'testnet' || (inferred === 'unknown' && normalizedIncomingNetwork === 'testnet')) {
       walletState.addresses.testnet = singleAddr.trim();
@@ -454,16 +486,37 @@ export async function updateWalletFromPairing(data: {
     normalizedIncomingNetwork === 'testnet' &&
     !walletState.addresses.testnet &&
     !walletState.addresses.testnet4 &&
-    !(data.chainCode && (walletState.pubKeys.testnet || walletState.pubKeys.testnet4 || data.publicKey))
+    !(normalizedData.chainCode && (walletState.pubKeys.testnet || walletState.pubKeys.testnet4 || normalizedData.publicKey))
   ) {
     throw new Error('Payload missing Testnet address (tb1...)');
+  }
+
+  // Reconcile active network with actual available slots to avoid ending up on an empty key slot.
+  if (
+    normalizedIncomingNetwork === 'testnet' &&
+    !walletState.addresses.testnet &&
+    !walletState.addresses.testnet4 &&
+    !walletState.pubKeys.testnet &&
+    !walletState.pubKeys.testnet4 &&
+    (walletState.addresses.mainnet || walletState.pubKeys.mainnet)
+  ) {
+    console.warn('[Wallet] Pairing payload declared testnet but only mainnet material was available; falling back active network to mainnet');
+    normalizedIncomingNetwork = 'mainnet';
+  }
+
+  if (
+    normalizedIncomingNetwork === 'mainnet' &&
+    !walletState.addresses.mainnet &&
+    !walletState.pubKeys.mainnet &&
+    (walletState.addresses.testnet || walletState.addresses.testnet4 || walletState.pubKeys.testnet || walletState.pubKeys.testnet4)
+  ) {
+    console.warn('[Wallet] Pairing payload declared mainnet but only testnet material was available; falling back active network to testnet');
+    normalizedIncomingNetwork = 'testnet';
   }
 
   walletState.activeNetwork = normalizedIncomingNetwork;
 
   // Persist merged state
-  await chrome.storage.local.set({ pairedWallets: JSON.stringify(walletState) });
-
   // Determine active network for UI / store
   const activeNetwork: 'mainnet' | 'testnet' = normalizedIncomingNetwork;
 
@@ -475,14 +528,39 @@ export async function updateWalletFromPairing(data: {
   const activeAddr = activeAddrRaw && inferAddressNetwork(activeAddrRaw) === activeNetwork
     ? activeAddrRaw
     : undefined;
-  const activePk =
+  let activePk =
     activeNetwork === 'testnet'
       ? (walletState.pubKeys.testnet || walletState.pubKeys.testnet4)
       : walletState.pubKeys.mainnet;
 
-  if (activePk) await storage.set('publicKey', activePk);
-  if (data.chainCode) await storage.set('chainCode', data.chainCode);
-  if (data.nostr_npub) await storage.set('pairedNostrNpub', data.nostr_npub);
+  if (!activePk && normalizedData.publicKey) {
+    activePk = normalizedData.publicKey;
+    if (activeNetwork === 'testnet') {
+      walletState.pubKeys.testnet = walletState.pubKeys.testnet || normalizedData.publicKey;
+      walletState.pubKeys.testnet4 = walletState.pubKeys.testnet4 || normalizedData.publicKey;
+    } else {
+      walletState.pubKeys.mainnet = walletState.pubKeys.mainnet || normalizedData.publicKey;
+    }
+  }
+
+  if (normalizedData.chainCode) {
+    if (activeNetwork === 'testnet') {
+      walletState.chainCodes.testnet = walletState.chainCodes.testnet || normalizedData.chainCode;
+      walletState.chainCodes.testnet4 = walletState.chainCodes.testnet4 || normalizedData.chainCode;
+    } else {
+      walletState.chainCodes.mainnet = walletState.chainCodes.mainnet || normalizedData.chainCode;
+    }
+  }
+
+  await chrome.storage.local.set({ pairedWallets: JSON.stringify(walletState) });
+
+  if (activePk) {
+    await storage.set('publicKey', activePk);
+  }
+  if (normalizedData.chainCode) {
+    await storage.set('chainCode', normalizedData.chainCode);
+  }
+  if (normalizedData.nostr_npub) await storage.set('pairedNostrNpub', normalizedData.nostr_npub);
   // Persist active network for legacy single-network consumers.
   const legacyNetwork = activeNetwork;
   await storage.set('network', legacyNetwork);
@@ -496,19 +574,28 @@ export async function updateWalletFromPairing(data: {
   await setNetworkStore(activeNetwork);
 
   // Add device to paired devices list
-  const deviceId = data.deviceId || 'mobile-wallet';
+  const deviceId = normalizedData.deviceId || 'mobile-wallet';
   const pairedDevices = [deviceId];
   await storage.set('pairedDevices', JSON.stringify(pairedDevices));
 
   // Update wallet store (use active address / pubkey)
   walletStore.update(state => ({
     ...state,
-    publicKey: activePk || data.publicKey,
-    chainCode: data.chainCode,
-    pairedNostrNpub: data.nostr_npub || state.pairedNostrNpub,
+    publicKey: activePk || normalizedData.publicKey,
+    chainCode: normalizedData.chainCode,
+    pairedNostrNpub: normalizedData.nostr_npub || state.pairedNostrNpub,
     network: legacyNetwork,
     pairedDevices
   }));
+
+  const persistedPk = await storage.get<string>('publicKey');
+  const persistedCc = await storage.get<string>('chainCode');
+  console.warn('[PAIRING-DIAG] persisted pairing keys', {
+    activeNetwork,
+    hasPersistedPublicKey: !!persistedPk,
+    persistedPublicKeyPrefix: persistedPk ? `${persistedPk.slice(0, 8)}...` : null,
+    hasPersistedChainCode: !!persistedCc,
+  });
 
   // If a single address was provided (legacy path)
   if (activeAddr) {
@@ -528,7 +615,7 @@ export async function updateWalletFromPairing(data: {
   }
 
   // If we have chain code, derive addresses
-  if (data.chainCode) {
+  if (normalizedData.chainCode) {
     await deriveInitialAddresses();
   } else if (activePk) {
     console.warn('[Wallet] No chainCode in payload – attempting limited discovery from fingerprint only');

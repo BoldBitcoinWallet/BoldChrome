@@ -70,14 +70,28 @@ class QRService {
   private currentSession = writable<QRSession | null>(null);
   public session = { subscribe: this.currentSession.subscribe };
 
-  private async generateQRCode(data: unknown): Promise<string> {
+  // Machine-to-machine payloads (like PSBT) are more reliable without logo overlays.
+  private async generatePlainQRCode(
+    payload: string,
+    options?: { width?: number; errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H' }
+  ): Promise<string> {
+    return QRCode.toDataURL(payload, {
+      errorCorrectionLevel: options?.errorCorrectionLevel ?? 'M',
+      margin: 2,
+      width: options?.width ?? 520,
+      color: { dark: '#000000', light: '#ffffff' }
+    });
+  }
+
+  private async generateQRCode(data: unknown, options?: { width?: number }): Promise<string> {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
+    const width = options?.width ?? 360;
 
     if (typeof document === 'undefined') {
       return QRCode.toDataURL(payload, {
         errorCorrectionLevel: 'H',
         margin: 2,
-        width: 360,
+        width,
         color: { dark: '#000000', light: '#ffffff' }
       });
     }
@@ -87,7 +101,7 @@ class QRService {
     await QRCode.toCanvas(canvas, payload, {
       errorCorrectionLevel: 'H',
       margin: 2,
-      width: 360,
+      width,
       color: { dark: '#000000', light: '#ffffff' }
     });
 
@@ -231,18 +245,15 @@ class QRService {
    */
   async generatePsbtQR(psbt: string): Promise<string> {
     const id = `psbt-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    
-    const qrData: QRData = {
-      type: 'psbt_signing',
-      data: {
-        psbt,
-        action: 'sign'
-      },
-      timestamp: Date.now(),
-      id
-    };
 
-    const qrCodeDataUrl = await this.generateQRCode(qrData);
+    const compactPsbt = (psbt || '').replace(/\s+/g, '');
+    if (!compactPsbt) {
+      throw new Error('Cannot generate PSBT QR: empty PSBT payload');
+    }
+
+    // Raw base64 PSBT (no JSON envelope) keeps density down; logo needs 'H' ECC (30%
+    // recovery) so the dense PSBT payload still decodes cleanly with the center obscured.
+    const qrCodeDataUrl = await this.generateQRCode(compactPsbt, { width: 560 });
 
     this.currentSession.set({
       id,
@@ -250,6 +261,12 @@ class QRService {
       qrCodeDataUrl,
       status: 'awaiting_scan',
       createdAt: Date.now()
+    });
+
+    console.log('[QR Service] PSBT QR generated (compact payload)', {
+      id,
+      payloadLength: compactPsbt.length,
+      prefix: compactPsbt.slice(0, 16),
     });
 
     return qrCodeDataUrl;
@@ -811,7 +828,24 @@ class QRService {
   private async processPairingData(input: any) {
     const candidate = input?.data ?? input;
     const decrypted = this.decryptPairingPayload(candidate);
-    const pairingData = decrypted || candidate;
+    const rawPairingData = decrypted || candidate;
+    const pairingData = {
+      ...rawPairingData,
+      publicKey:
+        rawPairingData?.publicKey ??
+        rawPairingData?.pubKey ??
+        rawPairingData?.pk ??
+        rawPairingData?.pub_key,
+      chainCode:
+        rawPairingData?.chainCode ??
+        rawPairingData?.chain_code ??
+        rawPairingData?.cc ??
+        rawPairingData?.chainCodeHex ??
+        rawPairingData?.chain_code_hex,
+      addresses: rawPairingData?.addresses ?? rawPairingData?.addrs,
+      pubKeys: rawPairingData?.pubKeys ?? rawPairingData?.pub_keys,
+      nostr_npub: rawPairingData?.nostr_npub ?? rawPairingData?.npub,
+    };
 
     if (!pairingData || (!pairingData.publicKey && !pairingData.addresses && !pairingData.address)) {
       throw new Error('Pairing payload missing expected fields');

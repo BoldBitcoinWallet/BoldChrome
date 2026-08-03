@@ -4,6 +4,7 @@ import { storage } from './storage';
 export type NostrMessageType =
   | 'COSIGN_REQUEST'
   | 'COSIGN_RESPONSE'
+  | 'COSIGN_READY'
   | 'CHAT_MESSAGE'
   | 'DEVICE_PING';
 
@@ -18,6 +19,7 @@ export interface NostrEnvelope<T = unknown> {
 
 export interface CoSignRequestPayload {
   txId: string;
+  traceId?: string;
   psbtHex: string;
   psbtBase64?: string;
   amountSats: number;
@@ -32,6 +34,17 @@ export interface CoSignResponsePayload {
   signedPsbtBase64?: string;
   approved: boolean;
   reason?: string;
+}
+
+/** Sent by a co-signing device the instant it commits to entering the native TSS
+ * wait loop, so a waiting mobile initiator wakes up and joins at (roughly) the same
+ * time. BoldChrome itself never enters that wait loop (it is watch-only and has no
+ * keyshare), but it must be able to parse this message type when it arrives —
+ * previously it fell outside the type union entirely, which is a real "unified event
+ * dispatch" gap vs. BoldWallet's identical protocol. */
+export interface CoSignReadyPayload {
+  txId: string;
+  traceId?: string;
 }
 
 export type NostrConnectionState =
@@ -267,6 +280,29 @@ class NostrMessagingService {
     const envelope: NostrEnvelope<CoSignResponsePayload> = {
       id: randomId(),
       type: 'COSIGN_RESPONSE',
+      senderFingerprint,
+      recipientFingerprint,
+      timestamp: Date.now(),
+      payload,
+    };
+
+    await this.sendEnvelope(recipientNpub, envelope);
+    return envelope;
+  }
+
+  /** BoldChrome is watch-only and never enters the native TSS wait loop itself, but a
+   * paired mobile device that forwards our COSIGN_REQUEST to its own MPC committee peer
+   * may still be waiting on *us* if we are ever a live participant in some future flow.
+   * Provided for protocol parity with BoldWallet so this type is never silently unhandled. */
+  async sendCoSignReady(
+    recipientNpub: string,
+    senderFingerprint: string,
+    recipientFingerprint: string,
+    payload: CoSignReadyPayload,
+  ): Promise<NostrEnvelope<CoSignReadyPayload>> {
+    const envelope: NostrEnvelope<CoSignReadyPayload> = {
+      id: randomId(),
+      type: 'COSIGN_READY',
       senderFingerprint,
       recipientFingerprint,
       timestamp: Date.now(),

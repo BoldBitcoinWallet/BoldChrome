@@ -218,10 +218,10 @@
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (/qr-reader not found/i.test(errMsg)) {
-        console.warn('Scanner start delayed: qr-reader host missing during mount transition');
+        console.warn('Scanner start deferred: qr-reader host missing during mount transition');
         return;
       }
-      console.error('Scanner start error:', err);
+      console.error('Scanner camera start error:', err);
       hasError = true;
       scannerStatus = 'Unable to start camera';
     }

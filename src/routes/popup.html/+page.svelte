@@ -23,9 +23,9 @@
     walletStore,
     refreshWalletData,
     initializeWalletStore,
+    updateWalletFromPairing,
     resetWallet,
     fetchMoreTransactions,
-    getNextChangeAddress,
     getCurrentReceiveAddress,
     runHdDiscovery,
     switchAddressType,
@@ -37,6 +37,7 @@
     setNetwork,
   } from "$lib/stores/network";
   import { qr } from "$lib/services/qr";
+  import { psbt } from "$lib/services/psbt";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
   import QRScanner from "$lib/components/QRScanner.svelte";
   import { goto } from "$app/navigation";
@@ -991,14 +992,14 @@
 
   function inferPairingNetwork(payload: any): "mainnet" | "testnet" | null {
     const declared = payload?.network;
-    if (declared === "mainnet") return "mainnet";
-    if (
-      declared === "testnet" ||
-      declared === "testnet4" ||
-      declared === "testnet3"
-    ) {
-      return "testnet";
-    }
+    const declaredNetwork: "mainnet" | "testnet" | null =
+      declared === "mainnet"
+        ? "mainnet"
+        : declared === "testnet" ||
+            declared === "testnet4" ||
+            declared === "testnet3"
+          ? "testnet"
+          : null;
 
     const addr =
       payload?.address ||
@@ -1006,8 +1007,23 @@
       payload?.addresses?.testnet4 ||
       payload?.addresses?.mainnet;
 
-    if (typeof addr !== "string" || !addr) return null;
-    return /^tb1|^[mn2]/.test(addr) ? "testnet" : "mainnet";
+    const inferredFromAddress: "mainnet" | "testnet" | null =
+      typeof addr === "string" && addr
+        ? /^tb1|^[mn2]/.test(addr)
+          ? "testnet"
+          : "mainnet"
+        : null;
+
+    if (declaredNetwork && inferredFromAddress && declaredNetwork !== inferredFromAddress) {
+      console.warn("[pairing] Network declaration/address format mismatch; preferring address format", {
+        declaredNetwork,
+        inferredFromAddress,
+        addressPreview: typeof addr === "string" ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : null,
+      });
+      return inferredFromAddress;
+    }
+
+    return inferredFromAddress || declaredNetwork;
   }
 
   async function handleQRScanFromCamera(qrData: string) {
@@ -1036,7 +1052,16 @@
       await initializeWalletStore();
 
       const latestWallet = get(walletStore);
-      const paired = !!latestWallet.publicKey?.trim();
+      let persistedPublicKey = (await storage.get<string>("publicKey")) || "";
+      let paired = !!persistedPublicKey.trim();
+
+      if (!paired && result?.data?.publicKey) {
+        console.warn("[pairing] Scan produced key material but store was empty; applying direct pairing fallback");
+        await updateWalletFromPairing(result.data);
+        await initializeWalletStore();
+        persistedPublicKey = (await storage.get<string>("publicKey")) || "";
+        paired = !!persistedPublicKey.trim();
+      }
 
       if (paired) {
         pairingStatus = "Paired successfully!";
@@ -1081,7 +1106,11 @@
         const latestAfter = get(walletStore);
         console.warn('[pairing] No publicKey after processScanedQR', {
           publicKey: latestAfter.publicKey,
+          persistedPublicKey,
           addresses: latestAfter.addresses?.length,
+          resultNetwork: result?.data?.network,
+          resultHasChainCode: !!result?.data?.chainCode,
+          resultHasAddress: !!(result?.data?.address || result?.data?.addresses),
         });
         pairingStatus = "Pairing response received but no key was stored";
         // Stay on scanner or go back? Go back to options
@@ -1416,71 +1445,29 @@
         throw new Error("Failed to get fee estimates from mempool");
       }
 
-      const baseSize = 10;
-      const inputSize = 68;
-      const outputSize = 31;
-      const numOutputs = 2;
-      const initialVsize = baseSize + inputSize + numOutputs * outputSize;
-      const initialFee = Math.ceil(initialVsize * feeRateUsed);
-      let targetSats = amountSats + initialFee;
-      const sortedUtxos = [...taggedUtxos].sort((a, b) => b.value - a.value);
-      let totalInput = 0;
-      let numInputs = 0;
-      const selectedUtxos: typeof taggedUtxos = [];
-      for (const u of sortedUtxos) {
-        totalInput += u.value;
-        numInputs += 1;
-        selectedUtxos.push(u);
-        if (totalInput >= targetSats) break;
-      }
-      const estimatedVsize =
-        baseSize + numInputs * inputSize + numOutputs * outputSize;
-      const feeSats = Math.max(1, Math.ceil(estimatedVsize * feeRateUsed));
-
-      if (amountSats + feeSats > balanceSats) {
+      const estimatedVsize = 140;
+      const estimatedFeeSats = Math.max(1, Math.ceil(estimatedVsize * feeRateUsed));
+      if (amountSats + estimatedFeeSats > balanceSats) {
         throw new Error(
-          `Total (amount + fee) exceeds balance. Have ${balanceSats} sats, need ${amountSats + feeSats} sats.`,
+          `Total (amount + fee) exceeds balance. Have ${balanceSats} sats, need ${amountSats + estimatedFeeSats} sats.`,
         );
       }
 
-      const hdState = wallet.hdState;
-      const addressType = hdState?.addressType ?? "segwit-native";
-      const firstInputPath = selectedUtxos[0]?.derivationPath ?? "";
-
-      // Build utxosJson matching mobile's expected format
-      const utxosJson = JSON.stringify(
-        selectedUtxos.map((u) => ({
-          txid: u.txid,
-          vout: u.vout,
-          value: u.value,
-          derivationPath: u.derivationPath,
-          address: u.address,
-        })),
-      );
-
-      // Change output: derive the next HD change address
-      const changeAddrObj = getNextChangeAddress();
-      const changeAddress = changeAddrObj?.address ?? "";
-
-      const { dataUrl } = await qr.generateSendQR(
-        sendAddress,
+      const { psbtBase64, feeSats } = await psbt.createPsbt({
+        recipientAddress: sendAddress,
         amountSats,
-        feeSats,
-        "",
-        addressType,
-        firstInputPath,
-        network,
-        utxosJson,
-        changeAddress,
-      );
-      qrCodeDataUrl = dataUrl;
-      qrModalTitle = "Scan with Mobile Wallet to Send";
+        feeRate: feeRateUsed,
+      });
+
+      const psbtQrDataUrl = await qr.generatePsbtQR(psbtBase64);
+      qrCodeDataUrl = psbtQrDataUrl;
+      qrModalTitle = "Scan with Mobile Wallet to Co-Sign";
       showSend = false;
       showQRModal = true;
       message =
-        "Open your mobile wallet and scan this QR to complete the send.";
+        "Open your mobile wallet and scan this QR to sign and request peer co-signature.";
       triggerToast(
-        `Send QR generated (fee ${feeSats} sats). Scan with mobile to complete.`,
+        `PSBT QR generated (fee ${feeSats} sats). Scan with mobile to co-sign.`,
         "success",
       );
 
