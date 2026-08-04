@@ -26,6 +26,9 @@ export interface CoSignRequestPayload {
   feeSats: number;
   recipientAddress: string;
   network: 'mainnet' | 'testnet' | 'testnet4';
+  // Explicit sender intent, in addition to the implicit signal of psbtHex being
+  // empty/populated: 'dkls' = native MPC send, 'psbt' = external PSBT co-sign/export.
+  requestMode?: 'dkls' | 'psbt';
 }
 
 export interface CoSignResponsePayload {
@@ -91,7 +94,17 @@ export interface Nip46IncomingResponse {
 
 type SubscriptionHandler = (event: any, relayUrl: string) => void;
 
-const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol'];
+// Diversified so a single relay outage/rate-limit can't block delivery.
+// relay.nostr.band swapped for nostr.hifish.org after observed 502/503 instability.
+const DEFAULT_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://nostr.mom',
+  'wss://nostr.hifish.org',
+  'wss://nostr.wine',
+];
+const RELAY_CONNECT_WAIT_MS = 3000;
+const RELAY_CONNECT_POLL_MS = 150;
 const KEY_TAG = 'bold-cosign-v1';
 const NIP46_KIND = 24133;
 const NIP46_TAG = 'bold-nip46-v1';
@@ -232,12 +245,27 @@ class NostrMessagingService {
     return () => this.nip46ResponseListeners.delete(listener);
   }
 
+  /** Gives newly-opened sockets a brief window to reach OPEN before giving up,
+   * instead of failing immediately on relays that are mid-handshake. */
+  private async waitForAnyOpenSocket(timeoutMs = RELAY_CONNECT_WAIT_MS): Promise<boolean> {
+    const hasOpen = () => Array.from(this.sockets.values()).some(ws => ws.readyState === WebSocket.OPEN);
+    if (hasOpen()) return true;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, RELAY_CONNECT_POLL_MS));
+      if (hasOpen()) return true;
+    }
+    return false;
+  }
+
   async sendEnvelope<T>(recipientNpub: string, envelope: NostrEnvelope<T>): Promise<void> {
     await this.ensureIdentity();
     const recipientHex = await this.npubToHex(recipientNpub);
     const plaintext = JSON.stringify(envelope);
     const encrypted = await this.encryptForRecipient(plaintext, recipientHex);
     const event = await this.signEvent(encrypted, recipientHex, envelope.type);
+
+    await this.waitForAnyOpenSocket();
 
     let delivered = 0;
     for (const ws of this.sockets.values()) {
@@ -327,6 +355,27 @@ class NostrMessagingService {
         clearTimeout(timeout);
         off();
         resolve(msg as NostrIncomingMessage<CoSignResponsePayload>);
+      });
+    });
+  }
+
+  /** Resolves once the paired mobile device acknowledges it has entered its own native
+   * signing flow for txId (it holds the keyshare and signs/broadcasts autonomously —
+   * this extension never runs a Round 1, it is watch-only). */
+  waitForCoSignReady(txId: string, timeoutMs = 20000): Promise<NostrIncomingMessage<CoSignReadyPayload>> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        off();
+        reject(new Error('Timed out waiting for Nostr co-sign ready'));
+      }, timeoutMs);
+
+      const off = this.onMessage(msg => {
+        if (msg.envelope.type !== 'COSIGN_READY') return;
+        const payload = msg.envelope.payload as CoSignReadyPayload;
+        if (payload?.txId !== txId) return;
+        clearTimeout(timeout);
+        off();
+        resolve(msg as NostrIncomingMessage<CoSignReadyPayload>);
       });
     });
   }
@@ -444,8 +493,10 @@ class NostrMessagingService {
 
     if (!nsec) {
       const secret = tools.generateSecretKey();
-      const secretHex = bytesToHex(secret);
-      nsec = tools.nip19.nsecEncode(secretHex);
+      // nsecEncode expects raw bytes (it bech32-encodes directly), unlike npubEncode
+      // which takes hex and converts internally — passing hex here throws
+      // "radix2.encode input should be Uint8Array".
+      nsec = tools.nip19.nsecEncode(secret);
       npub = tools.nip19.npubEncode(tools.getPublicKey(secret));
       await storage.set('nostrNsec', nsec);
       await storage.set('nostrNpub', npub);
@@ -591,6 +642,8 @@ class NostrMessagingService {
     const plaintext = JSON.stringify(payload);
     const encrypted = await this.encryptForRecipient(plaintext, recipientHex);
     const event = await this.signEventWithKind(encrypted, recipientHex, NIP46_KIND, [['x', NIP46_TAG]]);
+
+    await this.waitForAnyOpenSocket();
 
     let delivered = 0;
     for (const ws of this.sockets.values()) {

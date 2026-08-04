@@ -7,6 +7,7 @@
   export let txid: string | null = null;
   export let initialPhase: 'idle' | 'signing' | 'broadcasting' | 'mempool' | 'confirmed' = 'idle';
   export let network: 'mainnet' | 'testnet' = 'mainnet';
+  export let explorerBaseUrl: string | null = null;
   export let onPhaseChange: (phase: string) => void = () => {};
   export let compact = false; // allows reuse in different containers
 
@@ -28,6 +29,7 @@
   // Real-time tx data
   let confirmations = 0;
   let txStatus: any = null;
+  let confirmedBlockHeight: number | null = null;
   let errorMessage: string | null = null;
   let isPolling = false;
   let pollAttempts = 0;
@@ -41,6 +43,25 @@
     return network === 'testnet'
       ? 'https://mempool.space/testnet/api'
       : 'https://mempool.space/api';
+  }
+
+  function getExplorerBase(): string {
+    if (explorerBaseUrl && explorerBaseUrl.trim()) {
+      return explorerBaseUrl.trim().replace(/\/+$/, '');
+    }
+    return getMempoolApiBase().replace(/\/api\/?$/i, '');
+  }
+
+  function openTxOnExplorer(): void {
+    if (!txid) return;
+    const url = `${getExplorerBase()}/tx/${txid}`;
+    if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+      chrome.tabs.create({ url });
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   }
 
   function setPhase(newPhase: Phase) {
@@ -158,7 +179,11 @@
       if (res.ok && res.data) {
         errorMessage = null;
         txStatus = res.data;
-        confirmations = txStatus?.confirmed ? (txStatus.block_height ? 1 : 0) : 0;
+        confirmedBlockHeight =
+          txStatus?.confirmed && Number.isFinite(Number(txStatus?.block_height))
+            ? Number(txStatus.block_height)
+            : null;
+        confirmations = txStatus?.confirmed ? (confirmedBlockHeight ? 1 : 0) : 0;
 
         if (txStatus.confirmed && phase !== 'confirmed') {
           setPhase('confirmed');
@@ -236,7 +261,13 @@
     lastTrackedTxid = txid;
     confirmations = 0;
     txStatus = null;
+    confirmedBlockHeight = null;
     errorMessage = null;
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    startPolling(txid);
     if (phase !== 'mempool' && phase !== 'broadcasting') {
       setPhase('mempool');
     }
@@ -299,8 +330,8 @@
     <div class="chain-label">BLOCKCHAIN</div>
   </div>
 
-  <!-- Status Overlay -->
-  <div class="status-overlay">
+  <!-- Status Panel -->
+  <div class="status-panel">
     {#if errorMessage}
       <div class="status-text error">{errorMessage}</div>
       <button class="retry-btn" on:click={() => { if (txid) { pollAttempts = 0; errorMessage = null; startPolling(txid); } }}>
@@ -320,15 +351,26 @@
         {/if}
       </div>
     {:else if phase === 'confirmed'}
-      <div class="status-text confirmed">Confirmed on-chain ✓</div>
+      <div class="status-text confirmed">
+        {#if confirmedBlockHeight}
+          Confirmed in Block #{confirmedBlockHeight}
+        {:else}
+          Confirmed on-chain ✓
+        {/if}
+      </div>
     {/if}
 
     {#if txid && !errorMessage}
-      <div class="txid-pill" role="button" tabindex="0"
-           on:click={() => navigator.clipboard?.writeText(txid)}
-           on:keydown={(e) => e.key === 'Enter' && navigator.clipboard?.writeText(txid)}>
+      <button
+        type="button"
+        class="txid-pill"
+        on:click={openTxOnExplorer}
+        on:keydown={(e) => e.key === 'Enter' && openTxOnExplorer()}
+        title="Open transaction in explorer"
+        aria-label="Open transaction in explorer"
+      >
         {txid.slice(0, 8)}…{txid.slice(-6)}
-      </div>
+      </button>
     {/if}
   </div>
 </div>
@@ -345,7 +387,7 @@
     overflow: hidden;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     gap: 24px;
     padding: 16px 12px;
     box-sizing: border-box;
@@ -359,6 +401,10 @@
     min-height: 160px;
     max-height: 200px;
     gap: 16px;
+  }
+
+  .tx-visualizer > :global(*) {
+    flex-shrink: 0;
   }
 
   /* Wallet Node */
@@ -590,20 +636,34 @@
   }
 
   /* Status */
-  .status-overlay {
+  .status-panel {
     position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
+    left: 0;
+    right: 0;
+    bottom: 8px;
     z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 12px;
+    box-sizing: border-box;
+    pointer-events: auto;
   }
 
   .status-text {
-    font-size: 10px;
+    font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
+    line-height: 1.35;
+    letter-spacing: 0.02em;
     color: #888888;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    margin: 0;
+    text-align: center;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .status-text.confirmed {
@@ -612,6 +672,7 @@
   }
 
   .txid-pill {
+    border: 1px solid rgba(0, 255, 204, 0.35);
     font-family: monospace;
     font-size: 9px;
     background: rgba(255, 255, 255, 0.06);
@@ -620,11 +681,30 @@
     border-radius: 9999px;
     cursor: pointer;
     user-select: none;
-    transition: background 120ms ease;
+    transition: background 120ms ease, border-color 120ms ease;
+    line-height: 1.4;
+    white-space: nowrap;
   }
 
   .txid-pill:hover {
     background: rgba(0, 255, 204, 0.15);
+    border-color: rgba(0, 255, 204, 0.65);
+  }
+
+  .txid-pill:focus-visible {
+    outline: 2px solid rgba(0, 255, 204, 0.7);
+    outline-offset: 1px;
+  }
+
+  .retry-btn {
+    border: 1px solid rgba(255, 215, 0, 0.35);
+    border-radius: 999px;
+    background: rgba(255, 215, 0, 0.1);
+    color: #ffd700;
+    font-size: 10px;
+    line-height: 1.35;
+    padding: 2px 10px;
+    cursor: pointer;
   }
 
   /* Keyframe animations — all GPU friendly */

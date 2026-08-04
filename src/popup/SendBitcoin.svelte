@@ -1,14 +1,26 @@
 <script lang="ts">
   import { psbt } from '../lib/services/psbt';
   import { qr } from '../lib/services/qr';
-  import { walletStore } from '../lib/stores/wallet';
+  import { walletStore, getCurrentReceiveAddress } from '../lib/stores/wallet';
 
   const psbtSession = psbt.session;
   const qrSession = qr.session;
 
+  function describeSendError(err: unknown): string {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/radix2\.encode|Uint8Array|bech32/i.test(msg)) {
+      return 'Failed to prepare a secure connection to your mobile device. Please try again — if this persists, re-pair your device.';
+    }
+    if (/HTTP 5\d\d|NetworkError|Failed to fetch|timed? ?out/i.test(msg)) {
+      return 'Network error while preparing the transaction. Please check your connection and try again.';
+    }
+    return msg;
+  }
+
   let recipientAddress = ''; 
   let amountBtc = '';
   let feeRate = 1;
+  let sendMode: 'dkls' | 'psbt' = 'dkls';
   let qrCodeUrl = '';
   let lastPayload = '';
   import QRScanner from '$lib/components/QRScanner.svelte';
@@ -78,53 +90,69 @@
         return;
       }
 
-      // If this wallet is paired with a mobile device, create a PSBT and request signing via PSBT QR
-      if ($walletStore.pairedDevices && $walletStore.pairedDevices.length > 0) {
-        const { psbtBase64, feeSats } = await psbt.createPsbt({
-          recipientAddress,
-          amountSats,
-          feeRate
-        });
+      // Paired via a live Nostr channel: request a native MPC send directly. The paired
+      // mobile device signs with its own DKLS committee peer and broadcasts itself — no
+      // PSBT should be built/sent here, since a populated psbtHex makes the mobile side
+      // treat this as an externally co-signed PSBT needing a further peer QR handoff.
+      const pairedNostrNpub = ($walletStore.pairedNostrNpub || '').trim();
 
-        // Request signing via QR
-        await psbt.requestSigning(psbtBase64);
+      if (sendMode === 'dkls') {
+        if (pairedNostrNpub) {
+          const { qrDataUrl } = await psbt.requestNativeSend({ recipientAddress, amountSats, feeRate });
+          // Strictly airgapped initiation: extension only shows QR for mobile scan.
+          qrCodeUrl = qrDataUrl;
+          lastPayload = '';
+          qrMode = 'send';
+          copyToast = 'Send QR generated — scan with your mobile to continue';
+          if (toastTimer) clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => (copyToast = ''), 4000);
+          return;
+        }
 
-        qrMode = 'psbt';
-        // Wait for qr session to update reactively and UI will pick it up
-        copyToast = 'PSBT QR generated — scan with your mobile to sign';
+        // No live Nostr channel yet: fall back to the plain send-fill QR (v5 format),
+        // which mobile already recognizes as a native, non-PSBT send request.
+        let feeRateUsed = feeRate;
+        try {
+          const { halfHourFee, hourFee, fastestFee } = await (await import('$lib/services/blockchain')).blockchain.getFeeEstimates();
+          if (!feeRateUsed || feeRateUsed <= 0) {
+            feeRateUsed = halfHourFee || hourFee || fastestFee || 5;
+          }
+        } catch (e) {
+          feeRateUsed = feeRate || 5;
+        }
+
+        const estimatedVsize = 250; // conservative default
+        const feeSats = Math.max(1, Math.round(feeRateUsed * estimatedVsize));
+        const addressType = $walletStore.hdState?.addressType || 'segwit-native';
+        const derivationPath = getCurrentReceiveAddress()?.path || '';
+        const res = await qr.generateSendQR(recipientAddress, amountSats, feeSats, '', addressType, derivationPath, $walletStore.network);
+        qrCodeUrl = res.dataUrl;
+        lastPayload = res.payload;
+        qrMode = 'send';
+
+        copyToast = 'QR generated — scan with your mobile to complete the send';
         if (toastTimer) clearTimeout(toastTimer);
         toastTimer = setTimeout(() => (copyToast = ''), 3000);
-
         return;
       }
 
-      // Not paired: generate a send-fill QR for the mobile to complete the send
-      // Fetch recommended fees from the blockchain API and choose a sensible fee rate if user not set
-      let feeRateUsed = feeRate;
-      try {
-        const { halfHourFee, hourFee, fastestFee } = await (await import('$lib/services/blockchain')).blockchain.getFeeEstimates();
-        if (!feeRateUsed || feeRateUsed <= 0) {
-          feeRateUsed = halfHourFee || hourFee || fastestFee || 5;
-        }
-      } catch (e) {
-        feeRateUsed = feeRate || 5;
-      }
+      // Standard PSBT Export: explicit user choice, regardless of pairing type.
+      const { psbtBase64 } = await psbt.createPsbt({
+        recipientAddress,
+        amountSats,
+        feeRate
+      });
 
-      const estimatedVsize = 250; // conservative default
-      const feeSats = Math.max(1, Math.round(feeRateUsed * estimatedVsize));
+      // Request signing via QR
+      await psbt.requestSigning(psbtBase64);
 
-      const res = await qr.generateSendQR(recipientAddress, amountSats, feeSats, '');
-      qrCodeUrl = res.dataUrl;
-      lastPayload = res.payload;
-      qrMode = 'send';
-
-      // Show confirmation toast briefly
-      copyToast = 'QR generated — scan with your mobile';
+      qrMode = 'psbt';
+      // Wait for qr session to update reactively and UI will pick it up
+      copyToast = 'PSBT QR generated — scan with your mobile to sign';
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => (copyToast = ''), 3000);
-
     } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
+      error = describeSendError(err);
     }
   }
 
@@ -156,7 +184,9 @@
       const estimatedVsize = 250; // conservative default
       const feeSats = Math.max(1, Math.round(feeRate * estimatedVsize));
 
-      const res = await qr.generateSendQR(recipientAddress, amountSats, feeSats, '');
+      const addressType = $walletStore.hdState?.addressType || 'segwit-native';
+      const derivationPath = getCurrentReceiveAddress()?.path || '';
+      const res = await qr.generateSendQR(recipientAddress, amountSats, feeSats, '', addressType, derivationPath, $walletStore.network);
       qrCodeUrl = res.dataUrl;
       lastPayload = res.payload;
       qrMode = 'send';
@@ -205,6 +235,26 @@
       Fee Rate (sat/vB)
       <input type="number" bind:value={feeRate} min="1" />
     </label>
+
+    <div>
+      <span id="send-bitcoin-mode-label">Signing Mode</span>
+      <div role="group" aria-labelledby="send-bitcoin-mode-label" style="display:flex;gap:8px;margin-top:4px;">
+        <button
+          type="button"
+          on:click={() => (sendMode = 'dkls')}
+          style={`flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid ${sendMode === 'dkls' ? 'var(--color-primary)' : 'var(--color-border)'};background:${sendMode === 'dkls' ? 'rgba(247,147,26,0.1)' : 'transparent'};color:var(--color-text);`}
+        >
+          Regular DKLS MPC Transaction
+        </button>
+        <button
+          type="button"
+          on:click={() => (sendMode = 'psbt')}
+          style={`flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid ${sendMode === 'psbt' ? 'var(--color-primary)' : 'var(--color-border)'};background:${sendMode === 'psbt' ? 'rgba(247,147,26,0.1)' : 'transparent'};color:var(--color-text);`}
+        >
+          Standard PSBT Export
+        </button>
+      </div>
+    </div>
 
     <div style="display:flex;gap:8px;align-items:center;">
       <button on:click={createTransaction} disabled={!recipientAddress || !amountBtc}>

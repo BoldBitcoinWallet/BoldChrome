@@ -8,7 +8,7 @@ import { Point, getPublicKey, sign as ecdsaSign, verify as ecdsaVerify, schnorr,
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
 import { writable, get } from 'svelte/store';
-import { walletStore, getNextChangeAddress, type TaggedUTXO } from '../stores/wallet';
+import { walletStore, getNextChangeAddress, getCurrentReceiveAddress, type TaggedUTXO } from '../stores/wallet';
 import { blockchain } from './blockchain';
 import { qr } from './qr';
 import { storage } from './storage';
@@ -227,7 +227,7 @@ export interface PsbtSession {
   txid?: string;
   error?: string;
   deliveryMode?: 'qr' | 'nostr+qr';
-  nostrState?: 'idle' | 'pending' | 'delivered' | 'timeout' | 'failed';
+  nostrState?: 'idle' | 'pending' | 'acknowledged' | 'delivered' | 'timeout' | 'failed';
 }
 
 export interface CreatePsbtParams {
@@ -374,6 +374,57 @@ class PsbtService {
   }
 
   /**
+   * Request a native (PSBT-less) MPC send: this device's paired mobile wallet performs
+   * the actual DKLS keysign with its own committee peer and broadcasts the transaction
+   * itself. This initiation path is strictly airgapped from the extension side: we only
+   * encode/send details via QR, and never push COSIGN_REQUEST over Nostr from Chrome.
+   * Building/sending a PSBT here instead would make the mobile side treat this watch-only
+   * request as an externally co-signed PSBT needing a further peer-to-peer QR handoff
+   * (see `requestSigning`).
+   */
+  async requestNativeSend(params: CreatePsbtParams): Promise<{ psbtId: string; qrDataUrl: string }> {
+    const wallet = get(walletStore);
+
+    const { recipientAddress, amountSats, feeRate = 5 } = params;
+    const estimatedFee = Math.ceil(this.estimateTransactionSize(1, 2) * feeRate);
+    const psbtId = `send-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+    // Always generate a scannable fallback QR up front so the user has a manual path
+    // if the concurrent Nostr push fails or no relay connects in time.
+    const addressType = wallet.hdState?.addressType || 'segwit-native';
+    // Mobile needs the full path (not just the account level) to derive the exact
+    // pubkey for this keyshare during MPC signing.
+    const derivationPath = getCurrentReceiveAddress()?.path || '';
+    const network = await this.resolveSessionNetwork();
+    const { dataUrl: qrDataUrl } = await qr.generateSendQR(
+      recipientAddress,
+      amountSats,
+      estimatedFee,
+      '',
+      addressType,
+      derivationPath,
+      network,
+      '',
+      '',
+      psbtId,
+    );
+
+    this.currentSession.set({
+      psbtId,
+      psbt: '',
+      status: 'awaiting_signature',
+      createdAt: Date.now(),
+      recipientAddress,
+      amountSats,
+      feeSats: estimatedFee,
+      deliveryMode: 'qr',
+      nostrState: 'idle',
+    });
+
+    return { psbtId, qrDataUrl };
+  }
+
+  /**
    * Request mobile device to sign PSBT via QR code
    */
   async requestSigning(psbtBase64: string): Promise<string> {
@@ -410,18 +461,21 @@ class PsbtService {
     return session.psbtId;
   }
 
+  private async resolveSessionNetwork(): Promise<'mainnet' | 'testnet' | 'testnet4'> {
+    const wallet = get(walletStore);
+    if (wallet.network === 'mainnet') {
+      return 'mainnet';
+    }
+    const variant = await storage.get<'testnet' | 'testnet4'>('testnetApiVariant');
+    return variant === 'testnet4' ? 'testnet4' : 'testnet';
+  }
+
   private async tryNostrCoSignDelivery(recipientNpub: string, psbtBase64: string, txId: string): Promise<void> {
     try {
       await nostrMessaging.connect();
 
       const wallet = get(walletStore);
-      const variant = await storage.get<'testnet' | 'testnet4'>('testnetApiVariant');
-      const network =
-        wallet.network === 'mainnet'
-          ? 'mainnet'
-          : variant === 'testnet4'
-          ? 'testnet4'
-          : 'testnet';
+      const network = await this.resolveSessionNetwork();
 
       const payload: CoSignRequestPayload = {
         txId,
@@ -431,6 +485,7 @@ class PsbtService {
         feeSats: Number(get(this.currentSession)?.feeSats || 0),
         recipientAddress: String(get(this.currentSession)?.recipientAddress || ''),
         network,
+        requestMode: 'psbt',
       };
 
       const senderFingerprint = keyshareFingerprint(wallet.publicKey);

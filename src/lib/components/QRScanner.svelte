@@ -32,8 +32,6 @@
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Camera API not available in this browser');
       }
-
-      console.log('[QRScanner] Requesting camera permission...');
       
       // Request camera permission with more specific constraints
       stream = await navigator.mediaDevices.getUserMedia({
@@ -44,7 +42,6 @@
         }
       });
       
-      console.log('[QRScanner] Camera permission granted, starting video...');
       cameraStarted = true;
       
       if (video) {
@@ -56,7 +53,6 @@
         scanning = true;
         requestAnimationFrame(tick);
         
-        console.log('[QRScanner] Video started successfully');
       }
     } catch (err) {
       console.error('[QRScanner] Camera error:', err);

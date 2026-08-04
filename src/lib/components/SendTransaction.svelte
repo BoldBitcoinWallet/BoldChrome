@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { psbt } from '$lib/services/psbt';
-  import { walletStore, refreshWalletData } from '$lib/stores/wallet';
+  import { walletStore, refreshWalletData, getCurrentReceiveAddress } from '$lib/stores/wallet';
   import QRScanner from './QRScanner.svelte';
   import { qr } from '$lib/services/qr';
 
@@ -11,6 +11,7 @@
   let recipientAddress = '';
   let amountBTC = '';
   let feeRate = 5; // sats/vByte
+  let sendMode: 'dkls' | 'psbt' = 'dkls';
   let isCreating = false;
   let showPsbtQR = false;
   let showScanner = false;
@@ -59,7 +60,45 @@
     error = '';
 
     try {
-      // Create PSBT (returns base64 and feeSats)
+      const pairedNostrNpub = ($walletStore.pairedNostrNpub || '').trim();
+
+      if (sendMode === 'dkls') {
+        // Regular DKLS MPC Transaction: never build/send a PSBT. The paired mobile
+        // device signs with its own DKLS committee peer and broadcasts itself.
+        if (pairedNostrNpub) {
+          const { qrDataUrl } = await psbt.requestNativeSend({ recipientAddress, amountSats, feeRate });
+          // Strictly airgapped initiation: extension only shows QR for mobile scan.
+          psbtQRData = qrDataUrl;
+          lastPayload = '';
+          qrMode = 'send';
+          step = 'qr';
+          showPsbtQR = true;
+
+          copyToast = 'Send QR generated — scan with your mobile to continue';
+          if (toastTimer) clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => (copyToast = ''), 4000);
+          return;
+        }
+
+        // No live Nostr channel yet: fall back to the plain send-fill QR (v5 format),
+        // which mobile already recognizes as a native, non-PSBT send request.
+        const addressType = $walletStore.hdState?.addressType || 'segwit-native';
+        const derivationPath = getCurrentReceiveAddress()?.path || '';
+        const res = await qr.generateSendQR(recipientAddress, amountSats, estimatedFee, '', addressType, derivationPath, $walletStore.network);
+        psbtQRData = res.dataUrl;
+        lastPayload = res.payload;
+        qrMode = 'send';
+        step = 'qr';
+        showPsbtQR = true;
+
+        copyToast = 'QR generated — scan with your mobile to complete the send';
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => (copyToast = ''), 3000);
+        return;
+      }
+
+      // Standard PSBT Export: explicit user choice to build and hand off a real PSBT,
+      // regardless of pairing type (e.g. for external co-signers or interoperability).
       const { psbtBase64, feeSats } = await psbt.createPsbt({
         recipientAddress,
         amountSats,
@@ -71,33 +110,16 @@
         estimatedFee = feeSats; // reactive variable bound in parent scope (amount/fee/total display)
       }
 
-      // If this wallet is paired with a mobile device, request signing via PSBT QR
-      if ($walletStore.pairedDevices && $walletStore.pairedDevices.length > 0) {
-        await psbt.requestSigning(psbtBase64);
+      await psbt.requestSigning(psbtBase64);
 
-        // Get QR data from QR service (qrSession is reactive)
-        if ($qrSession && $qrSession.qrCodeDataUrl) {
-          psbtQRData = $qrSession.qrCodeDataUrl;
-        }
-
-        qrMode = 'psbt';
-        step = 'qr';
-        showPsbtQR = true;
-        return;
+      // Get QR data from QR service (qrSession is reactive)
+      if ($qrSession && $qrSession.qrCodeDataUrl) {
+        psbtQRData = $qrSession.qrCodeDataUrl;
       }
 
-      // Not paired: generate a send-fill QR payload that the mobile will scan and perform the send
-      const res = await qr.generateSendQR(recipientAddress, amountSats, feeSats, '');
-      psbtQRData = res.dataUrl;
-      lastPayload = res.payload;
-      qrMode = 'send';
+      qrMode = 'psbt';
       step = 'qr';
       showPsbtQR = true;
-
-      // toast
-      copyToast = 'QR generated — scan with your mobile to complete the send';
-      if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => (copyToast = ''), 3000);
     } catch (err) {
       console.error('Error creating PSBT:', err);
       error = err instanceof Error ? err.message : 'Failed to create transaction';
@@ -198,6 +220,35 @@
           class="input"
         />
         <p class="hint">Recommended: 5-10 sat/vB for normal priority</p>
+      </div>
+
+      <div class="field">
+        <span id="send-mode-label">Signing Mode</span>
+        <div class="mode-toggle" role="group" aria-labelledby="send-mode-label">
+          <button
+            type="button"
+            class="mode-option"
+            class:active={sendMode === 'dkls'}
+            on:click={() => (sendMode = 'dkls')}
+          >
+            Regular DKLS MPC Transaction
+          </button>
+          <button
+            type="button"
+            class="mode-option"
+            class:active={sendMode === 'psbt'}
+            on:click={() => (sendMode = 'psbt')}
+          >
+            Standard PSBT Export
+          </button>
+        </div>
+        <p class="hint">
+          {#if sendMode === 'dkls'}
+            Your paired mobile device signs directly with native MPC \u2014 no PSBT file is created.
+          {:else}
+            Builds a standard PSBT for external co-signing or import into another wallet.
+          {/if}
+        </p>
       </div>
 
       <div class="summary">
@@ -374,6 +425,30 @@
     font-size: 12px;
     color: #71717a;
     margin: 0;
+  }
+
+  .mode-toggle {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mode-option {
+    flex: 1;
+    padding: 10px 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .mode-option.active {
+    border-color: #f7931a;
+    background: rgba(247, 147, 26, 0.1);
+    color: #f7931a;
   }
 
   .summary {

@@ -357,14 +357,6 @@ export async function updateWalletFromPairing(data: {
     pubKeys: normalizedPubKeys,
   };
 
-  console.warn('[PAIRING-DIAG] updateWalletFromPairing input', {
-    network: normalizedData.network,
-    hasPublicKey: !!normalizedData.publicKey,
-    hasChainCode: !!normalizedData.chainCode,
-    hasAddress: !!normalizedData.address,
-    hasAddressesObject: !!(normalizedData.addresses && typeof normalizedData.addresses === 'object'),
-  });
-
   const inferAddressNetwork = (address: string): 'mainnet' | 'testnet' | 'unknown' => {
     const a = (address || '').trim().toLowerCase();
     if (!a) return 'unknown';
@@ -590,12 +582,6 @@ export async function updateWalletFromPairing(data: {
 
   const persistedPk = await storage.get<string>('publicKey');
   const persistedCc = await storage.get<string>('chainCode');
-  console.warn('[PAIRING-DIAG] persisted pairing keys', {
-    activeNetwork,
-    hasPersistedPublicKey: !!persistedPk,
-    persistedPublicKeyPrefix: persistedPk ? `${persistedPk.slice(0, 8)}...` : null,
-    hasPersistedChainCode: !!persistedCc,
-  });
 
   // If a single address was provided (legacy path)
   if (activeAddr) {
@@ -702,7 +688,6 @@ export async function runHdDiscovery(force = false, overrideAddressType?: 'segwi
   if (!overrideAddressType && !force && existing?.discoveryDone) {
     const age = Date.now() - (existing.discoveryLastAt || 0);
     if (age < HD_DISCOVERY_STALE_MS) {
-      console.log('[Wallet] HD discovery still fresh, skipping');
       return false;
     }
   }

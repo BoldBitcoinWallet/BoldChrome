@@ -148,7 +148,6 @@
         { facingMode: "environment" },
         config,
         async (decodedText) => {
-          console.log('QR Code scanned:', decodedText);
           scannerStatus = 'QR Code detected!';
 
           await stopScanner();

@@ -510,16 +510,27 @@
 
   function openTxInMempool(txid: string) {
     const network = $walletStore.network || "mainnet";
-    const base =
-      network === "testnet"
-        ? "https://mempool.space/testnet"
-        : "https://mempool.space";
+    const base = getActiveExplorerBase(network);
     const url = `${base}/tx/${txid}`;
     if (typeof chrome !== "undefined" && chrome.tabs?.create) {
       chrome.tabs.create({ url });
     } else {
       window.open(url, "_blank", "noopener");
     }
+  }
+
+  function getActiveExplorerBase(network: "mainnet" | "testnet"): string {
+    if (network === "testnet") {
+      return "https://mempool.space/testnet";
+    }
+    if (
+      typeof mempoolChoice === "string" &&
+      mempoolChoice.trim() !== "" &&
+      mempoolChoice !== "loading"
+    ) {
+      return normalizeMempoolUrl(mempoolChoice).replace(/\/api\/?$/i, "");
+    }
+    return "https://mempool.space";
   }
 
   // Convert wallet transactions to UI format (app-aligned: status, amount, address, txid, time)
@@ -569,32 +580,112 @@
     };
   });
 
+  const TX_PAGE_SIZE = 3;
+  let txPageIndex = 0;
+  let txTotalPages = 1;
+  let visibleTransactions: typeof transactions = [];
+
+  $: txTotalPages = Math.max(1, Math.ceil(transactions.length / TX_PAGE_SIZE));
+  $: txPageIndex = Math.min(txPageIndex, txTotalPages - 1);
+  $: visibleTransactions = transactions.slice(
+    txPageIndex * TX_PAGE_SIZE,
+    txPageIndex * TX_PAGE_SIZE + TX_PAGE_SIZE,
+  );
+
+  function prevTxPage(): void {
+    txPageIndex = Math.max(0, txPageIndex - 1);
+  }
+
+  function nextTxPage(): void {
+    txPageIndex = Math.min(txTotalPages - 1, txPageIndex + 1);
+  }
+
   // Active transaction visualizer state (shown below transaction history).
+  let activeTxIntentIds: string[] = [];
+  let activeTxCarouselIndex = 0;
   let activeTxVisualizerTxid: string | null = null;
   let activeTxVisualizerPhase: TxVisualizerPhase = "idle";
   let clearVisualizerTimer: ReturnType<typeof setTimeout> | null = null;
+  let activeTxExplorerBase = "https://mempool.space";
+  let activeTxSummaryLabel = "";
 
-  // Auto-track latest outgoing transaction after co-sign/broadcast.
+  // Track outgoing intents for carousel controls and active graph context.
   $: {
-    const outgoingPending = $walletStore.transactions.find(
-      (tx) => tx.type === "send" && tx.status === "pending",
-    );
+    const outgoingIntents = $walletStore.transactions
+      .filter((tx) => tx.type === "send")
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map((tx) => tx.txid);
 
-    if (outgoingPending) {
-      activeTxVisualizerTxid = outgoingPending.txid;
-      activeTxVisualizerPhase = "mempool";
+    activeTxIntentIds = outgoingIntents;
+
+    if (activeTxIntentIds.length === 0) {
+      activeTxVisualizerTxid = null;
+      activeTxVisualizerPhase = "idle";
+      activeTxCarouselIndex = 0;
       if (clearVisualizerTimer) {
         clearTimeout(clearVisualizerTimer);
         clearVisualizerTimer = null;
       }
-    } else if (activeTxVisualizerTxid) {
+    } else {
+      const outgoingPending = $walletStore.transactions.find(
+        (tx) => tx.type === "send" && tx.status === "pending",
+      );
+
+      if (
+        !activeTxVisualizerTxid ||
+        !activeTxIntentIds.includes(activeTxVisualizerTxid)
+      ) {
+        activeTxVisualizerTxid = outgoingPending?.txid || activeTxIntentIds[0];
+      }
+
+      if (outgoingPending && activeTxVisualizerTxid === outgoingPending.txid) {
+        activeTxVisualizerTxid = outgoingPending.txid;
+        activeTxVisualizerPhase = "mempool";
+        if (clearVisualizerTimer) {
+          clearTimeout(clearVisualizerTimer);
+          clearVisualizerTimer = null;
+        }
+      }
+
       const tracked = $walletStore.transactions.find(
         (tx) => tx.txid === activeTxVisualizerTxid,
       );
-      if (tracked?.status === "confirmed") {
-        activeTxVisualizerPhase = "confirmed";
-      }
+      activeTxVisualizerPhase =
+        tracked?.status === "confirmed" ? "confirmed" : "mempool";
+
+      activeTxCarouselIndex = Math.max(
+        0,
+        activeTxIntentIds.indexOf(activeTxVisualizerTxid || ""),
+      );
     }
+  }
+
+  function selectVisualizerIntent(index: number): void {
+    if (index < 0 || index >= activeTxIntentIds.length) return;
+    activeTxCarouselIndex = index;
+    activeTxVisualizerTxid = activeTxIntentIds[index];
+  }
+
+  function cycleVisualizerIntent(direction: -1 | 1): void {
+    if (activeTxIntentIds.length <= 1) return;
+    const nextIndex =
+      (activeTxCarouselIndex + direction + activeTxIntentIds.length) %
+      activeTxIntentIds.length;
+    selectVisualizerIntent(nextIndex);
+  }
+
+  $: activeTxExplorerBase = getActiveExplorerBase(
+    $walletStore.network || "mainnet",
+  );
+
+  $: activeTxSummaryLabel =
+    activeTxIntentIds.length > 0
+      ? `Transaction ${activeTxCarouselIndex + 1} of ${activeTxIntentIds.length}`
+      : "";
+
+  function getTxShortId(txid: string | null): string {
+    if (!txid) return "";
+    return `${txid.slice(0, 8)}...${txid.slice(-6)}`;
   }
 
   function handleTxVisualizerPhaseChange(phase: string) {
@@ -611,6 +702,7 @@
   let showReceive = false;
   let sendAmount = "";
   let sendAddress = "";
+  let sendMode: "dkls" | "psbt" = "dkls";
   let showSendAddressScanner = false;
   let receiveAddress = ""; // Will be populated from store
   let receiveDerivationPath = "";
@@ -1346,13 +1438,17 @@
       if (address) {
         blockchain.setNetwork(network);
         const [fees, utxos] = await Promise.all([
-          blockchain.getFeeEstimates(),
+          blockchain
+            .getFeeEstimates()
+            .catch(() => ({ fastestFee: 2, halfHourFee: 1, hourFee: 1, minimumFee: 1 })),
           blockchain.getUTXOs(address).catch(() => []),
         ]);
         sendFeeEstimates = fees;
         sendUtxos = utxos && utxos.length > 0 ? utxos : null;
       } else {
-        sendFeeEstimates = await blockchain.getFeeEstimates();
+        sendFeeEstimates = await blockchain
+          .getFeeEstimates()
+          .catch(() => ({ fastestFee: 2, halfHourFee: 1, hourFee: 1, minimumFee: 1 }));
       }
     } catch (e) {
       console.warn("Send modal: failed to load fees/utxos", e);
@@ -1437,7 +1533,9 @@
 
       let feeRateUsed = getSendFeeRate();
       if (!feeRateUsed || feeRateUsed <= 0) {
-        const feeEst = await blockchain.getFeeEstimates();
+        const feeEst = await blockchain
+          .getFeeEstimates()
+          .catch(() => ({ fastestFee: 2, halfHourFee: 1, hourFee: 1, minimumFee: 1 }));
         feeRateUsed =
           feeEst.hourFee ?? feeEst.halfHourFee ?? feeEst.fastestFee ?? 5;
       }
@@ -1453,6 +1551,53 @@
         );
       }
 
+      if (sendMode === "dkls") {
+        const pairedNostrNpub = ($walletStore.pairedNostrNpub || "").trim();
+        if (pairedNostrNpub) {
+          // Native DKLS MPC send: paired mobile device signs with its own committee
+          // peer and broadcasts itself — never build/send a PSBT for this path.
+          const { qrDataUrl } = await psbt.requestNativeSend({
+            recipientAddress: sendAddress,
+            amountSats,
+            feeRate: feeRateUsed,
+          });
+          // Strictly airgapped initiation: extension only shows QR for mobile scan.
+          qrCodeDataUrl = qrDataUrl;
+          qrModalTitle = "Scan with Mobile Wallet to Send";
+          showSend = false;
+          showQRModal = true;
+          triggerToast(
+            "Send QR generated. Scan with your mobile to continue.",
+            "success",
+          );
+          return;
+        }
+
+        // No live Nostr channel yet: fall back to the plain send-fill QR (v5 format),
+        // which mobile already recognizes as a native, non-PSBT send request.
+        const { dataUrl } = await qr.generateSendQR(
+          sendAddress,
+          amountSats,
+          estimatedFeeSats,
+          "",
+          $walletStore.hdState?.addressType || "segwit-native",
+          getCurrentReceiveAddress()?.path || "",
+          $walletStore.network,
+        );
+        qrCodeDataUrl = dataUrl;
+        qrModalTitle = "Scan with Mobile Wallet to Send";
+        showSend = false;
+        showQRModal = true;
+        message =
+          "Open your mobile wallet and scan this QR to complete the send natively.";
+        triggerToast("Send QR generated. Scan with mobile to complete.", "success");
+        setTimeout(() => {
+          message = "";
+        }, 1200);
+        return;
+      }
+
+      // Standard PSBT Export: explicit user choice, regardless of pairing type.
       const { psbtBase64, feeSats } = await psbt.createPsbt({
         recipientAddress: sendAddress,
         amountSats,
@@ -1487,6 +1632,14 @@
         triggerToast(message, "error");
       } else if (/fee estimates|No active wallet/.test(errMsg)) {
         message = errMsg;
+        triggerToast(message, "error");
+      } else if (/radix2\.encode|Uint8Array|bech32/i.test(errMsg)) {
+        message =
+          "Failed to prepare a secure connection to your mobile device. Please try again — if this persists, re-pair your device.";
+        triggerToast(message, "error");
+      } else if (/HTTP 5\d\d|NetworkError|Failed to fetch|timed? ?out/i.test(errMsg)) {
+        message =
+          "Network error while preparing the transaction. Please check your connection and try again.";
         triggerToast(message, "error");
       } else {
         triggerToast("Failed to prepare transaction", "error");
@@ -2465,70 +2618,95 @@
               {#if transactions.length === 0 && !$walletStore.isLoading}
                 <p class="tx-empty">No transactions yet</p>
               {:else}
-                <ul class="tx-list-ul">
-                  {#each transactions as tx (tx.id)}
-                    <li
-                      class="tx-item"
-                      class:in={tx.type === "in"}
-                      class:out={tx.type === "out"}
-                    >
-                      <button
-                        type="button"
-                        class="tx-item-btn"
-                        on:click={() => openTxInMempool(tx.id)}
+                <div class="tx-scroll-region" role="region" aria-label="Recent transactions list">
+                  <ul class="tx-list-ul">
+                    {#each visibleTransactions as tx (tx.id)}
+                      <li
+                        class="tx-item"
+                        class:in={tx.type === "in"}
+                        class:out={tx.type === "out"}
                       >
-                        <div class="tx-row tx-row-main">
-                          <div class="tx-status-wrap">
-                            <img
-                              src={tx.status === "pending"
-                                ? pendingIcon
-                                : tx.type === "in"
-                                  ? inIcon
-                                  : outIcon}
-                              alt=""
-                              class="tx-status-icon"
-                              width="20"
-                              height="20"
-                            />
-                            <span class="tx-status-text">{tx.statusLabel}</span>
-                          </div>
-                          <span
-                            class="tx-amount"
-                            class:in={tx.type === "in"}
-                            class:out={tx.type === "out"}
-                          >
-                            {tx.type === "in" ? "+" : "-"}{tx.amountFormatted}
-                            <span class="tx-unit">BTC</span>
-                          </span>
-                        </div>
-                        {#if tx.addressLabel}
-                          <div class="tx-row tx-row-address">
-                            <span class="tx-address-label"
-                              >{tx.addressLabel}</span
+                        <button
+                          type="button"
+                          class="tx-item-btn"
+                          on:click={() => openTxInMempool(tx.id)}
+                        >
+                          <div class="tx-row tx-row-main">
+                            <div class="tx-status-wrap">
+                              <img
+                                src={tx.status === "pending"
+                                  ? pendingIcon
+                                  : tx.type === "in"
+                                    ? inIcon
+                                    : outIcon}
+                                alt=""
+                                class="tx-status-icon"
+                                width="20"
+                                height="20"
+                              />
+                              <span class="tx-status-text">{tx.statusLabel}</span>
+                            </div>
+                            <span
+                              class="tx-amount"
+                              class:in={tx.type === "in"}
+                              class:out={tx.type === "out"}
                             >
-                            {#if tx.fiatAmount}
-                              <span class="tx-fiat"
-                                >~{fiatSymbol}{tx.fiatAmount}</span
-                              >
-                            {/if}
+                              {tx.type === "in" ? "+" : "-"}{tx.amountFormatted}
+                              <span class="tx-unit">BTC</span>
+                            </span>
                           </div>
-                        {/if}
-                        <div class="tx-row tx-row-meta">
-                          <span class="tx-id-label"
-                            >Tx: <span class="tx-id-value">{tx.shortTxId}</span
-                            ></span
-                          >
-                          <span class="tx-time">{tx.timeLabel}</span>
-                        </div>
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
+                          {#if tx.addressLabel}
+                            <div class="tx-row tx-row-address">
+                              <span class="tx-address-label"
+                                >{tx.addressLabel}</span
+                              >
+                              {#if tx.fiatAmount}
+                                <span class="tx-fiat"
+                                  >~{fiatSymbol}{tx.fiatAmount}</span
+                                >
+                              {/if}
+                            </div>
+                          {/if}
+                          <div class="tx-row tx-row-meta">
+                            <span class="tx-id-label"
+                              >Tx: <span class="tx-id-value">{tx.shortTxId}</span
+                              ></span
+                            >
+                            <span class="tx-time">{tx.timeLabel}</span>
+                          </div>
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
                 {#if transactions.length > 0}
                   <div class="tx-list-footer">
+                    {#if txTotalPages > 1}
+                      <div class="tx-page-controls">
+                        <button
+                          type="button"
+                          class="tx-page-btn"
+                          on:click={prevTxPage}
+                          disabled={txPageIndex === 0}
+                        >
+                          Prev
+                        </button>
+                        <span class="tx-page-indicator">
+                          {txPageIndex + 1} / {txTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          class="tx-page-btn"
+                          on:click={nextTxPage}
+                          disabled={txPageIndex >= txTotalPages - 1}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    {/if}
                     {#if $walletStore.isLoadingMoreTransactions}
                       <p class="tx-list-footer-loading">Loading more…</p>
-                    {:else if $walletStore.hasMoreTransactions}
+                    {:else if $walletStore.hasMoreTransactions && txPageIndex >= txTotalPages - 1}
                       <button
                         type="button"
                         class="tx-list-load-more"
@@ -2536,10 +2714,6 @@
                       >
                         Load more
                       </button>
-                    {:else}
-                      <p class="tx-list-footer-end">
-                        No more transactions · {transactions.length} in total
-                      </p>
                     {/if}
                   </div>
                 {/if}
@@ -2547,10 +2721,51 @@
 
               {#if activeTxVisualizerTxid}
                 <div class="active-tx-visualizer-wrap">
+                  {#if activeTxIntentIds.length > 1}
+                    <div class="active-tx-carousel-header">
+                      <button
+                        type="button"
+                        class="carousel-btn"
+                        on:click={() => cycleVisualizerIntent(-1)}
+                        aria-label="Previous transaction"
+                        title="Previous transaction"
+                      >
+                        &#8249;
+                      </button>
+                      <div class="carousel-meta">
+                        <span class="carousel-title">{activeTxSummaryLabel}</span>
+                        <span class="carousel-txid">{getTxShortId(activeTxVisualizerTxid)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        class="carousel-btn"
+                        on:click={() => cycleVisualizerIntent(1)}
+                        aria-label="Next transaction"
+                        title="Next transaction"
+                      >
+                        &#8250;
+                      </button>
+                    </div>
+                    <div class="active-tx-dots" role="tablist" aria-label="Transaction selector">
+                      {#each activeTxIntentIds as txIntentId, i}
+                        <button
+                          type="button"
+                          class="active-tx-dot"
+                          class:active={i === activeTxCarouselIndex}
+                          on:click={() => selectVisualizerIntent(i)}
+                          role="tab"
+                          aria-selected={i === activeTxCarouselIndex}
+                          aria-label={`Show transaction ${i + 1}: ${getTxShortId(txIntentId)}`}
+                          title={getTxShortId(txIntentId)}
+                        ></button>
+                      {/each}
+                    </div>
+                  {/if}
                   <ActiveTxVisualizer
                     txid={activeTxVisualizerTxid}
                     network={$walletStore.network}
                     initialPhase={activeTxVisualizerPhase}
+                    explorerBaseUrl={activeTxExplorerBase}
                     compact={true}
                     onPhaseChange={handleTxVisualizerPhaseChange}
                   />
@@ -2727,6 +2942,33 @@
                     <p class="send-total-warn">Amount + fee exceeds balance</p>
                   {/if}
                 {/if}
+                <div class="send-mode-track">
+                  <span class="send-fee-label" id="send-mode-label"
+                    >Signing Mode</span
+                  >
+                  <div
+                    class="send-mode-options"
+                    role="group"
+                    aria-labelledby="send-mode-label"
+                  >
+                    <button
+                      type="button"
+                      class="send-mode-btn"
+                      class:selected={sendMode === "dkls"}
+                      on:click={() => (sendMode = "dkls")}
+                    >
+                      Regular DKLS MPC
+                    </button>
+                    <button
+                      type="button"
+                      class="send-mode-btn"
+                      class:selected={sendMode === "psbt"}
+                      on:click={() => (sendMode = "psbt")}
+                    >
+                      Standard PSBT Export
+                    </button>
+                  </div>
+                </div>
                 <div class="modal-actions">
                   <button class="btn" on:click={closeModals}>Cancel</button>
                   <button
@@ -3095,7 +3337,8 @@
     width: 100%;
     min-width: 0;
     min-height: 100%;
-    height: 100%;
+    height: min(100dvh, 600px);
+    max-height: 600px;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -3175,7 +3418,7 @@
     min-width: 0;
     flex: 1;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: hidden;
     padding: 0 var(--space-small) var(--space-medium);
     box-sizing: border-box;
   }
@@ -4088,11 +4331,16 @@
 
   .tx-list {
     padding: 8px 0 0;
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     min-width: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
     margin-top: 4px;
+    display: flex;
+    flex-direction: column;
   }
 
   .tx-list-hidden {
@@ -4123,6 +4371,34 @@
     margin: 0;
   }
 
+  .tx-scroll-region {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding-right: 2px;
+  }
+
+  .tx-scroll-region::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .tx-scroll-region::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .tx-scroll-region::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+
+  .tx-scroll-region::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.34);
+  }
+
   .tx-list-ul {
     list-style: none;
     padding: 0;
@@ -4131,12 +4407,15 @@
     flex-direction: column;
     gap: 6px;
     min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .tx-list-footer {
     display: flex;
     flex-direction: column;
     align-items: center;
+    flex-shrink: 0;
     padding: var(--space-medium, 12px) 0;
     margin-top: var(--space-small, 8px);
     border-top: 1px solid var(--color-border);
@@ -4165,8 +4444,133 @@
     border-color: var(--color-primary);
   }
 
+  .tx-page-controls {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .tx-page-btn {
+    border: 1px solid var(--color-border);
+    background: var(--color-cardBackground);
+    color: var(--color-text);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    cursor: pointer;
+  }
+
+  .tx-page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .tx-page-indicator {
+    min-width: 52px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--color-textSecondary);
+    letter-spacing: 0.04em;
+  }
+
   .active-tx-visualizer-wrap {
     margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    min-height: 188px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .active-tx-visualizer-wrap :global(.tx-visualizer) {
+    flex-shrink: 0;
+    min-height: 176px;
+  }
+
+  .active-tx-carousel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .carousel-meta {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .carousel-title {
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--color-textSecondary);
+    letter-spacing: 0.03em;
+  }
+
+  .carousel-txid {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .carousel-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-cardBackground);
+    color: var(--color-text);
+    font-size: 18px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+
+  .carousel-btn:hover {
+    border-color: var(--color-primary);
+    background: var(--color-background);
+  }
+
+  .active-tx-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .active-tx-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .active-tx-dot.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
   }
 
   /* App-style transaction item card */
@@ -4174,11 +4578,13 @@
     margin: 0;
     list-style: none;
     min-width: 0;
+    width: 100%;
     box-sizing: border-box;
   }
   .tx-item-btn {
     display: block;
     width: 100%;
+    max-width: 100%;
     padding: 10px 12px;
     border-radius: 10px;
     transition:
@@ -4188,6 +4594,7 @@
     animation: slideInUp 0.3s ease-out;
     min-width: 0;
     box-sizing: border-box;
+    overflow: hidden;
     cursor: pointer;
     text-align: left;
     font: inherit;
@@ -4202,6 +4609,8 @@
     margin-top: 4px;
     gap: 8px;
     min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
   .tx-row:first-child {
     margin-top: 0;
@@ -4305,6 +4714,151 @@
     margin-top: auto;
     width: 100%;
     box-sizing: border-box;
+  }
+
+  /* Short-height visual polish: keep 3 tx rows + carousel + visualizer visible in tight popups. */
+  @media (max-height: 620px) {
+    .wallet-content {
+      padding: 0 8px 8px;
+      gap: 0;
+    }
+
+    .balance-card {
+      padding: 8px 10px;
+    }
+
+    .balance-card-inner {
+      min-height: 38px;
+      gap: 1px;
+    }
+
+    .actions-row {
+      margin-top: 6px;
+      margin-bottom: 6px;
+      gap: 8px;
+    }
+
+    .action-btn {
+      min-height: 34px;
+      padding: 6px 8px;
+    }
+
+    .tx-list {
+      padding-top: 4px;
+      margin-top: 2px;
+    }
+
+    .tx-scroll-region {
+      padding-right: 1px;
+    }
+
+    .tx-list h2 {
+      margin: 0 0 6px 0;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .tx-list-ul {
+      gap: 4px;
+    }
+
+    .tx-item-btn {
+      padding: 7px 9px;
+      border-radius: 8px;
+    }
+
+    .tx-row {
+      margin-top: 2px;
+      gap: 6px;
+    }
+
+    .tx-status-wrap {
+      gap: 6px;
+    }
+
+    .tx-status-icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    .tx-status-text {
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .tx-amount {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .tx-unit,
+    .tx-address-label,
+    .tx-fiat,
+    .tx-id-label,
+    .tx-time {
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .tx-row-address,
+    .tx-row-meta {
+      margin-top: 2px;
+    }
+
+    .tx-list-footer {
+      padding: 6px 0 4px;
+      margin-top: 4px;
+    }
+
+    .tx-page-controls {
+      margin-bottom: 4px;
+      gap: 6px;
+    }
+
+    .tx-page-btn {
+      padding: 3px 8px;
+      font-size: 11px;
+    }
+
+    .tx-page-indicator {
+      font-size: 10px;
+      min-width: 44px;
+    }
+
+    .active-tx-visualizer-wrap {
+      margin-top: 6px;
+      gap: 5px;
+      min-height: 170px;
+    }
+
+    .active-tx-visualizer-wrap :global(.tx-visualizer) {
+      min-height: 160px;
+    }
+
+    .active-tx-carousel-header {
+      gap: 6px;
+    }
+
+    .carousel-title,
+    .carousel-txid {
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .carousel-btn {
+      width: 24px;
+      height: 24px;
+      font-size: 16px;
+    }
+
+    .active-tx-dots {
+      gap: 5px;
+    }
+
+    .active-tx-dot {
+      width: 6px;
+      height: 6px;
+    }
   }
 
   .modal {
@@ -4825,16 +5379,18 @@
     display: flex !important;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 8px;
     overflow: visible; /* prevent any clipping of text ascenders/descenders */
     line-height: normal;
   }
   .app-header-left {
     display: inline-flex !important;
     align-items: center;
+    gap: 8px;
     width: auto !important;
     min-width: 0;
     flex: 1 1 auto;
+    padding-right: 8px;
   }
   .app-header-right {
     display: inline-flex !important;
@@ -4873,13 +5429,18 @@
       background 0.2s,
       border-color 0.2s,
       box-shadow 0.2s;
+    min-width: 0;
+    max-width: 100%;
   }
   .header-mainnet-testnet-wrap {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
     max-width: 100%;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    box-sizing: border-box;
   }
   .header-testnet-badge {
     display: inline-flex;
@@ -4910,6 +5471,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.2;
   }
 
   /* Content container below header — scrolls; reserve space for fixed header */
@@ -4919,7 +5481,7 @@
     flex-direction: column;
     align-items: stretch;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: hidden;
     width: 100%;
     min-width: 0;
     margin-top: 48px;
@@ -5713,7 +6275,8 @@
     width: 100%;
     max-width: 100%;
     min-height: 100%;
-    height: 100%;
+    height: min(100dvh, 600px);
+    max-height: 600px;
     flex: 1;
     margin: 0 auto;
     background: var(--color-background);
@@ -5730,35 +6293,46 @@
     width: 100% !important;
     max-width: 100% !important;
     z-index: 20;
-    display: block !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    box-sizing: border-box;
   }
   :global(.popup-root .app-header-left) {
-    position: absolute !important;
-    left: 12px !important;
-    right: auto !important;
-    top: 50% !important;
-    transform: translateY(-50%);
-    display: inline-flex !important;
-    align-items: center;
-    width: auto !important;
-  }
-  :global(.popup-root .app-header-right) {
-    position: absolute !important;
+    position: static !important;
     left: auto !important;
-    right: 12px !important;
-    top: 50% !important;
-    transform: translateY(-50%);
+    right: auto !important;
+    top: auto !important;
+    transform: none !important;
     display: inline-flex !important;
     align-items: center;
     gap: 8px;
     width: auto !important;
+    min-width: 0;
+    flex: 1 1 auto;
+    padding-right: 8px;
+  }
+  :global(.popup-root .app-header-right) {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    transform: none !important;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
+    width: auto !important;
+    margin-left: auto;
+    flex: 0 0 auto;
   }
 
   :global(.popup-root .app-content) {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: hidden;
     margin-top: 48px !important;
     padding-top: 8px !important;
     min-height: 0;
