@@ -8,7 +8,7 @@ import { Point, getPublicKey, sign as ecdsaSign, verify as ecdsaVerify, schnorr,
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
 import { writable, get } from 'svelte/store';
-import { walletStore, getNextChangeAddress, getCurrentReceiveAddress, type TaggedUTXO } from '../stores/wallet';
+import { walletStore, getNextChangeAddress, getCurrentReceiveAddress, type TaggedUTXO, type BrantaMerchant, setTransactionMetadata } from '../stores/wallet';
 import { blockchain } from './blockchain';
 import { qr } from './qr';
 import { storage } from './storage';
@@ -228,6 +228,7 @@ export interface PsbtSession {
   error?: string;
   deliveryMode?: 'qr' | 'nostr+qr';
   nostrState?: 'idle' | 'pending' | 'acknowledged' | 'delivered' | 'timeout' | 'failed';
+  brantaMerchant?: BrantaMerchant;
 }
 
 export interface CreatePsbtParams {
@@ -242,6 +243,68 @@ const ENABLE_LEGACY_COSIGN_FALLBACK = true;
 class PsbtService {
   private currentSession = writable<PsbtSession | null>(null);
   public session = { subscribe: this.currentSession.subscribe };
+
+  private classifyScriptType(scriptHex: string): 'p2wpkh' | 'p2sh' | 'p2pkh' | 'p2tr' | 'unknown' {
+    if (scriptHex.startsWith('0014') && scriptHex.length === 44) return 'p2wpkh';
+    if (scriptHex.startsWith('a914') && scriptHex.endsWith('87') && scriptHex.length === 46) return 'p2sh';
+    if (scriptHex.startsWith('76a914') && scriptHex.endsWith('88ac') && scriptHex.length === 50) return 'p2pkh';
+    if (scriptHex.startsWith('5120') && scriptHex.length === 68) return 'p2tr';
+    return 'unknown';
+  }
+
+  private p2wpkhScriptCode(scriptHex: string): Uint8Array {
+    const witnessProgram = scriptHex.slice(4); // drop OP_0 + push-20 prefix
+    return new Uint8Array(Buffer.from(`1976a914${witnessProgram}88ac`, 'hex'));
+  }
+
+  private logExtensionPreSignDiagnostics(
+    psbt: bitcoin.Psbt,
+    selectedUtxos: TaggedUTXO[],
+    prevOuts: Array<{ value: number; scriptHex: string }>,
+  ): void {
+    const unsignedTx = (psbt as any)?.__CACHE?.__TX as bitcoin.Transaction | undefined;
+    if (!unsignedTx) {
+      console.warn('[PSBT_SIGN_DEBUG][EXT] Unable to access unsigned transaction cache for diagnostics');
+      return;
+    }
+
+    selectedUtxos.forEach((utxo, inputIndex) => {
+      const prevOut = prevOuts[inputIndex];
+      if (!prevOut) return;
+
+      const psbtInput = (psbt.data.inputs[inputIndex] as { sighashType?: number }) || {};
+      const sighashType = psbtInput.sighashType || bitcoin.Transaction.SIGHASH_ALL;
+      const scriptType = this.classifyScriptType(prevOut.scriptHex);
+
+      let sighashHex = 'unavailable';
+      try {
+        if (scriptType === 'p2wpkh') {
+          const scriptCode = this.p2wpkhScriptCode(prevOut.scriptHex);
+          sighashHex = Buffer.from(
+            unsignedTx.hashForWitnessV0(inputIndex, scriptCode, BigInt(prevOut.value), sighashType),
+          ).toString('hex');
+        } else if (scriptType === 'p2pkh') {
+          const script = new Uint8Array(Buffer.from(prevOut.scriptHex, 'hex'));
+          sighashHex = Buffer.from(
+            unsignedTx.hashForSignature(inputIndex, script, sighashType),
+          ).toString('hex');
+        }
+      } catch (error) {
+        sighashHex = `error:${error instanceof Error ? error.message : String(error)}`;
+      }
+
+      console.warn('[PSBT_SIGN_DEBUG][EXT]', {
+        input: inputIndex,
+        txid: utxo.txid,
+        vout: utxo.vout,
+        derivationPath: utxo.derivationPath,
+        witnessUtxoValue: prevOut.value,
+        scriptType,
+        sighashType: `0x${sighashType.toString(16)}`,
+        sighashHex,
+      });
+    });
+  }
 
   /**
    * Create a PSBT for spending Bitcoin using tagged UTXOs from all HD addresses.
@@ -275,6 +338,7 @@ class PsbtService {
 
     let totalInput = 0;
     const selectedUtxos: TaggedUTXO[] = [];
+    const prevOuts: Array<{ value: number; scriptHex: string }> = [];
 
     // Largest-first coin selection from the aggregated tagged UTXO set
     const sortedUtxos = [...wallet.utxos].sort((a, b) => b.value - a.value);
@@ -286,6 +350,15 @@ class PsbtService {
       totalInput += utxo.value;
 
       const txHex = await blockchain.getTransactionHex(utxo.txid);
+      const prevTx = bitcoin.Transaction.fromHex(txHex);
+      const prevOutput = prevTx.outs[utxo.vout];
+      if (!prevOutput) {
+        throw new Error(`Missing prevout ${utxo.txid}:${utxo.vout} while building PSBT`);
+      }
+      prevOuts.push({
+        value: prevOutput.value,
+        scriptHex: Buffer.from(prevOutput.script).toString('hex'),
+      });
       
       const txBytes = (function hexToU8Local(hex: string) {
         const clean = (hex || '').replace(/^0x/, '').replace(/\s+/g, '');
@@ -346,6 +419,7 @@ class PsbtService {
     });
 
     const psbtBase64 = psbt.toBase64();
+    this.logExtensionPreSignDiagnostics(psbt, selectedUtxos, prevOuts);
     
     const psbtId = `psbt-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     this.currentSession.set({
@@ -653,7 +727,13 @@ class PsbtService {
           txid
         };
       });
-      
+
+      // Persist any Branta merchant metadata alongside this transaction so it
+      // can be rendered in the transaction history.
+      if (session.brantaMerchant) {
+        await setTransactionMetadata(txid, { brantaMerchant: session.brantaMerchant });
+      }
+
       console.log('[PSBT] Transaction broadcasted:', txid);
       return txid;
       
@@ -679,6 +759,14 @@ class PsbtService {
    */
   clearSession() {
     this.currentSession.set(null);
+  }
+
+  /**
+   * Attach Branta merchant metadata to the active session so it can be persisted
+   * with the transaction once it is broadcast.
+   */
+  setBrantaMerchant(merchant: BrantaMerchant | null) {
+    this.currentSession.update(s => s && merchant ? { ...s, brantaMerchant: merchant } : s);
   }
 
   /**

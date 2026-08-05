@@ -218,6 +218,17 @@ export function addTransaction(tx: Transaction) {
 }
 
 /**
+ * Remove a transaction by txid (e.g. user dismissed a completed tx from the carousel).
+ */
+export function removeTransaction(txid: string) {
+  walletStore.update(state => ({
+    ...state,
+    transactions: state.transactions.filter(t => t.txid !== txid),
+    lastTxUpdate: Date.now()
+  }));
+}
+
+/**
  * Set loading state
  */
 export function setLoading(isLoading: boolean) {
@@ -525,6 +536,11 @@ export async function updateWalletFromPairing(data: {
       ? (walletState.pubKeys.testnet || walletState.pubKeys.testnet4)
       : walletState.pubKeys.mainnet;
 
+  let activeChainCode =
+    activeNetwork === 'testnet'
+      ? (walletState.chainCodes.testnet || walletState.chainCodes.testnet4)
+      : walletState.chainCodes.mainnet;
+
   if (!activePk && normalizedData.publicKey) {
     activePk = normalizedData.publicKey;
     if (activeNetwork === 'testnet') {
@@ -542,6 +558,14 @@ export async function updateWalletFromPairing(data: {
     } else {
       walletState.chainCodes.mainnet = walletState.chainCodes.mainnet || normalizedData.chainCode;
     }
+    activeChainCode = normalizedData.chainCode;
+  }
+
+  if (!activeChainCode) {
+    activeChainCode =
+      activeNetwork === 'testnet'
+        ? (walletState.chainCodes.testnet || walletState.chainCodes.testnet4)
+        : walletState.chainCodes.mainnet;
   }
 
   await chrome.storage.local.set({ pairedWallets: JSON.stringify(walletState) });
@@ -549,8 +573,8 @@ export async function updateWalletFromPairing(data: {
   if (activePk) {
     await storage.set('publicKey', activePk);
   }
-  if (normalizedData.chainCode) {
-    await storage.set('chainCode', normalizedData.chainCode);
+  if (activeChainCode) {
+    await storage.set('chainCode', activeChainCode);
   }
   if (normalizedData.nostr_npub) await storage.set('pairedNostrNpub', normalizedData.nostr_npub);
   // Persist active network for legacy single-network consumers.
@@ -574,7 +598,7 @@ export async function updateWalletFromPairing(data: {
   walletStore.update(state => ({
     ...state,
     publicKey: activePk || normalizedData.publicKey,
-    chainCode: normalizedData.chainCode,
+    chainCode: activeChainCode,
     pairedNostrNpub: normalizedData.nostr_npub || state.pairedNostrNpub,
     network: legacyNetwork,
     pairedDevices
@@ -601,7 +625,7 @@ export async function updateWalletFromPairing(data: {
   }
 
   // If we have chain code, derive addresses
-  if (normalizedData.chainCode) {
+  if (activeChainCode) {
     await deriveInitialAddresses();
   } else if (activePk) {
     console.warn('[Wallet] No chainCode in payload – attempting limited discovery from fingerprint only');

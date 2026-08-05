@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { fade, fly, slide } from 'svelte/transition';
   import { mempoolClient } from '$lib/services/mempoolClient';
   import type { MempoolResponse } from '$lib/services/mempoolClient';
 
@@ -280,11 +281,15 @@
     <div class="wallet-label">WALLET</div>
     <div class="sig-nodes">
       <div class="sig-node" class:active={sig1Active}>
-        <div class="sig-glow"></div>
+        {#if sig1Active}
+          <div class="sig-glow" transition:slide={{ duration: 250 }}></div>
+        {/if}
         <span>SIG 1</span>
       </div>
       <div class="sig-node" class:active={sig2Active}>
-        <div class="sig-glow"></div>
+        {#if sig2Active}
+          <div class="sig-glow" transition:slide={{ duration: 250 }}></div>
+        {/if}
         <span>SIG 2</span>
       </div>
     </div>
@@ -332,45 +337,91 @@
 
   <!-- Status Panel -->
   <div class="status-panel">
-    {#if errorMessage}
-      <div class="status-text error">{errorMessage}</div>
-      <button class="retry-btn" on:click={() => { if (txid) { pollAttempts = 0; errorMessage = null; startPolling(txid); } }}>
-        Retry
-      </button>
-    {:else if phase === 'idle'}
-      <div class="status-text">Awaiting transaction</div>
-    {:else if phase === 'signing'}
-      <div class="status-text">Dual-signing in progress…</div>
-    {:else if phase === 'broadcasting'}
-      <div class="status-text">Broadcasting to network</div>
-    {:else if phase === 'mempool'}
-      <div class="status-text">
-        In mempool
-        {#if confirmations > 0}
-          • {confirmations} confirmation{confirmations > 1 ? 's' : ''}
+    <div class="status-stack">
+      {#key phase}
+        {#if errorMessage}
+          <div
+            class="status-phase"
+            in:fly={{ y: 10, duration: 400, delay: 100 }}
+            out:fade={{ duration: 200 }}
+          >
+            <div class="status-text error">{errorMessage}</div>
+            <button class="retry-btn" on:click={() => { if (txid) { pollAttempts = 0; errorMessage = null; startPolling(txid); } }}>
+              Retry
+            </button>
+          </div>
+        {:else if phase === 'idle'}
+          <div
+            class="status-phase"
+            in:fly={{ y: 10, duration: 400, delay: 100 }}
+            out:fade={{ duration: 200 }}
+          >
+            <div class="status-text">Awaiting transaction</div>
+          </div>
+        {:else if phase === 'signing'}
+          <div
+            class="status-phase"
+            in:fly={{ y: 10, duration: 400, delay: 100 }}
+            out:fade={{ duration: 200 }}
+          >
+            <div class="status-text">Dual-signing in progress…</div>
+          </div>
+        {:else if phase === 'broadcasting'}
+          <div
+            class="status-phase"
+            in:fly={{ y: 10, duration: 400, delay: 100 }}
+            out:fade={{ duration: 200 }}
+          >
+            <div class="status-text">Broadcasting to network</div>
+          </div>
+        {:else if phase === 'mempool'}
+          <div
+            class="status-phase"
+            in:fly={{ y: 10, duration: 400, delay: 100 }}
+            out:fade={{ duration: 200 }}
+          >
+            <div class="status-text">
+              In mempool
+              {#if confirmations > 0}
+                <span class="confirmations" transition:slide={{ duration: 200 }}>• {confirmations} confirmation{confirmations > 1 ? 's' : ''}</span>
+              {/if}
+            </div>
+          </div>
+        {:else if phase === 'confirmed'}
+          <div
+            class="status-phase"
+            in:fly={{ y: 10, duration: 400, delay: 100 }}
+            out:fade={{ duration: 200 }}
+          >
+            <div class="status-text confirmed">
+              {#if confirmedBlockHeight}
+                Confirmed in Block #{confirmedBlockHeight}
+              {:else}
+                Confirmed on-chain ✓
+              {/if}
+            </div>
+          </div>
         {/if}
-      </div>
-    {:else if phase === 'confirmed'}
-      <div class="status-text confirmed">
-        {#if confirmedBlockHeight}
-          Confirmed in Block #{confirmedBlockHeight}
-        {:else}
-          Confirmed on-chain ✓
-        {/if}
-      </div>
-    {/if}
+      {/key}
+    </div>
 
     {#if txid && !errorMessage}
-      <button
-        type="button"
-        class="txid-pill"
-        on:click={openTxOnExplorer}
-        on:keydown={(e) => e.key === 'Enter' && openTxOnExplorer()}
-        title="Open transaction in explorer"
-        aria-label="Open transaction in explorer"
+      <div
+        class="txid-wrapper"
+        in:fly={{ y: 8, duration: 350, delay: 120 }}
+        out:fade={{ duration: 200 }}
       >
-        {txid.slice(0, 8)}…{txid.slice(-6)}
-      </button>
+        <button
+          type="button"
+          class="txid-pill"
+          on:click={openTxOnExplorer}
+          on:keydown={(e) => e.key === 'Enter' && openTxOnExplorer()}
+          title="Open transaction in explorer"
+          aria-label="Open transaction in explorer"
+        >
+          {txid.slice(0, 8)}…{txid.slice(-6)}
+        </button>
+      </div>
     {/if}
   </div>
 </div>
@@ -389,7 +440,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 24px;
-    padding: 16px 12px;
+    padding: 16px 48px 16px 12px;
     box-sizing: border-box;
     isolation: isolate;
     /* GPU hints */
@@ -401,6 +452,7 @@
     min-height: 160px;
     max-height: 200px;
     gap: 16px;
+    padding: 12px 36px 12px 12px;
   }
 
   .tx-visualizer > :global(*) {
@@ -472,7 +524,9 @@
   /* Launch Path & Data Packet */
   .launch-path {
     position: relative;
-    width: 70px;
+    flex: 1 1 auto;
+    min-width: 30px;
+    max-width: 110px;
     height: 4px;
     background: linear-gradient(to right, #00ffcc, transparent);
     border-radius: 2px;
@@ -489,18 +543,18 @@
     border-radius: 3px;
     transform: translate3d(-50%, -50%, 0);
     box-shadow: 0 0 8px #ffd700, 0 0 16px rgba(255, 215, 0, 0.6);
-    transition: transform 900ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms ease;
-    will-change: transform;
+    transition: left 900ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms ease;
+    will-change: left;
     z-index: 3;
   }
 
   .data-packet.launched {
-    transform: translate3d(92px, -50%, 0);
+    left: calc(100% - 7px);
     opacity: 0.9;
   }
 
   .data-packet.in-cube {
-    transform: translate3d(92px, -50%, 0);
+    left: calc(100% + 56px);
     opacity: 0;
   }
 
@@ -647,9 +701,37 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
+    min-height: 56px;
     padding: 0 12px;
     box-sizing: border-box;
     pointer-events: auto;
+  }
+
+  .tx-visualizer.compact .status-panel {
+    min-height: 46px;
+  }
+
+  .status-stack {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    min-height: 1.6em;
+  }
+
+  .status-phase {
+    grid-area: 1 / 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .txid-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .status-text {
@@ -669,6 +751,10 @@
   .status-text.confirmed {
     color: #22ff88;
     text-shadow: 0 0 6px rgba(34, 255, 136, 0.6);
+  }
+
+  .confirmations {
+    display: inline-block;
   }
 
   .txid-pill {

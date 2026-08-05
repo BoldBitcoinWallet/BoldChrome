@@ -41,6 +41,9 @@ export interface StorageData {
 
   // First-load camera permission prompt (extension)
   cameraPermissionChecked?: boolean;
+
+  // Transaction metadata keyed by txid (JSON stringified)
+  txMetadata?: string;
 }
 
 /**

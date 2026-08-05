@@ -26,12 +26,13 @@
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
 		"typescript": "^5.9.3",
-		"vitest": "^3.2.4",
 		"vite": "^7.2.6",
-		"vite-plugin-top-level-await": "^1.6.0",
-		"vite-plugin-wasm": "^3.5.0"
+		"vite-plugin-top-level-await": "^1.2.2",
+		"vite-plugin-wasm": "^3.5.0",
+		"vitest": "^3.2.4"
 	},
 	"dependencies": {
+		"@branta-ops/branta": "^3.2.0",
 		"@noble/hashes": "^2.0.1",
 		"@noble/secp256k1": "^3.0.0",
 		"bip32": "^5.0.0",
@@ -45,4 +46,3 @@
 		"sveltekit-adapter-chrome-extension": "^2.0.1"
 	}
 }
-

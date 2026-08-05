@@ -30,6 +30,7 @@
     runHdDiscovery,
     switchAddressType,
     addressTypeUISelection,
+    removeTransaction,
   } from "$lib/stores/wallet";
   import {
     networkStore,
@@ -552,6 +553,8 @@
     const shortAddr = relevantAddr
       ? `${relevantAddr.slice(0, 4)}...${relevantAddr.slice(-4)}`
       : "";
+    const merchant = tx.brantaMerchant;
+    const merchantName = merchant?.merchantName;
     return {
       id: tx.txid,
       type,
@@ -562,10 +565,14 @@
         tx.status === "pending"
           ? type === "in"
             ? "Receiving"
-            : "Sending"
+            : merchantName
+              ? `Paying ${merchantName}`
+              : "Sending"
           : type === "in"
             ? "Received"
-            : "Sent",
+            : merchantName
+              ? `Sent to ${merchantName}`
+              : "Sent",
       shortTxId: `${tx.txid.slice(0, 4)}...${tx.txid.slice(-4)}`,
       timeLabel: formatTxTime(tx.timestamp, tx.status),
       addressLabel:
@@ -573,10 +580,13 @@
           ? shortAddr
             ? `Fr: ${shortAddr}`
             : ""
-          : shortAddr
-            ? `To: ${shortAddr}`
-            : "",
+          : merchantName
+            ? merchantName
+            : shortAddr
+              ? `To: ${shortAddr}`
+              : "",
       fiatAmount: btcRate > 0 ? (amountBtc * btcRate).toFixed(2) : "",
+      merchant,
     };
   });
 
@@ -686,6 +696,11 @@
   function getTxShortId(txid: string | null): string {
     if (!txid) return "";
     return `${txid.slice(0, 8)}...${txid.slice(-6)}`;
+  }
+
+  function removeActiveTxIntent(): void {
+    if (!activeTxVisualizerTxid) return;
+    removeTransaction(activeTxVisualizerTxid);
   }
 
   function handleTxVisualizerPhaseChange(phase: string) {
@@ -1666,6 +1681,7 @@
         timeLabel: "Just now",
         addressLabel: "",
         fiatAmount: btcRateForFiat ? (amount * btcRateForFiat).toFixed(2) : "",
+        merchant: undefined,
       },
       ...transactions,
     ];
@@ -2633,17 +2649,32 @@
                         >
                           <div class="tx-row tx-row-main">
                             <div class="tx-status-wrap">
-                              <img
-                                src={tx.status === "pending"
-                                  ? pendingIcon
-                                  : tx.type === "in"
-                                    ? inIcon
-                                    : outIcon}
-                                alt=""
-                                class="tx-status-icon"
-                                width="20"
-                                height="20"
-                              />
+                              {#if tx.merchant}
+                                <div class="tx-merchant-icon-wrap">
+                                  <img
+                                    src={tx.merchant.logoUrl || outIcon}
+                                    alt={tx.merchant.merchantName}
+                                    class="tx-merchant-icon"
+                                    on:error={(e) => {
+                                      const img = e.currentTarget as HTMLImageElement;
+                                      img.src = outIcon;
+                                    }}
+                                  />
+                                  <span class="tx-merchant-check" aria-hidden="true">✓</span>
+                                </div>
+                              {:else}
+                                <img
+                                  src={tx.status === "pending"
+                                    ? pendingIcon
+                                    : tx.type === "in"
+                                      ? inIcon
+                                      : outIcon}
+                                  alt=""
+                                  class="tx-status-icon"
+                                  width="20"
+                                  height="20"
+                                />
+                              {/if}
                               <span class="tx-status-text">{tx.statusLabel}</span>
                             </div>
                             <span
@@ -2744,6 +2775,15 @@
                         title="Next transaction"
                       >
                         &#8250;
+                      </button>
+                      <button
+                        type="button"
+                        class="carousel-btn remove-btn"
+                        on:click={removeActiveTxIntent}
+                        aria-label="Remove completed transaction"
+                        title="Remove completed transaction"
+                      >
+                        ×
                       </button>
                     </div>
                     <div class="active-tx-dots" role="tablist" aria-label="Transaction selector">
@@ -4551,6 +4591,18 @@
     background: var(--color-background);
   }
 
+  .carousel-btn.remove-btn {
+    border-color: rgba(255, 80, 80, 0.45);
+    color: #ff6464;
+    font-size: 20px;
+  }
+
+  .carousel-btn.remove-btn:hover {
+    border-color: #ff6464;
+    background: rgba(255, 80, 80, 0.12);
+    color: #ff8080;
+  }
+
   .active-tx-dots {
     display: flex;
     justify-content: center;
@@ -4634,6 +4686,36 @@
   .tx-list.dark-mode .tx-status-icon {
     filter: brightness(0) invert(1);
     opacity: 0.95;
+  }
+  .tx-merchant-icon-wrap {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  .tx-merchant-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+  }
+  .tx-merchant-check {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #22c55e;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--color-surface, #ffffff);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   }
   .tx-status-text {
     font-size: 15px;

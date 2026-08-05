@@ -1,0 +1,1 @@
+{"manifest_version":3,"name":"BoldChrome","version":"1.7","background":{"service_worker":"src/background.js"},"permissions":["activeTab","scripting"]}

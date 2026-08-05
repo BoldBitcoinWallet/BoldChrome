@@ -466,7 +466,12 @@ class QRService {
             selectedPubKey || (typeof qrData.pubKeys === 'string' ? qrData.pubKeys : undefined);
           const pairingData = {
             publicKey: selectedPubKeyOrFlat,
-            chainCode: qrData.chainCode,
+            chainCode:
+              qrData.chainCode ||
+              qrData.chain_code ||
+              qrData.chainCodeHex ||
+              qrData.chain_code_hex ||
+              qrData.cc,
             deviceId: qrData.deviceId || 'mobile-wallet',
             network: payloadNetwork,
             address: selectedAddressOrFlat,
@@ -474,6 +479,11 @@ class QRService {
             pubKeys: qrData.pubKeys,
             fingerprint: qrData.fingerprint,
             nostr_npub: qrData.nostr_npub,
+            // Keep aliases so downstream normalizers can still pick them up.
+            chain_code: qrData.chain_code,
+            chainCodeHex: qrData.chainCodeHex,
+            chain_code_hex: qrData.chain_code_hex,
+            cc: qrData.cc,
           };
           const processed = await this.processPairingData(pairingData);
           return { type: 'pairing_response', data: processed };

@@ -285,7 +285,23 @@
               {#each $walletStore.transactions.slice(0, 5) as tx}
                 <div class="transaction-item">
                   <div class="tx-info">
-                    <span class="tx-type {tx.type}">{tx.type}</span>
+                    {#if tx.brantaMerchant}
+                      <div class="tx-merchant-badge">
+                        <img
+                          src={tx.brantaMerchant.logoUrl || '/icons/icon48.png'}
+                          alt={tx.brantaMerchant.merchantName}
+                          class="tx-merchant-logo"
+                          on:error={(e) => {
+                            const img = e.currentTarget as HTMLImageElement;
+                            img.src = '/icons/icon48.png';
+                          }}
+                        />
+                        <span class="tx-merchant-checkmark" aria-hidden="true">✓</span>
+                        <span class="tx-merchant-name">{tx.brantaMerchant.merchantName}</span>
+                      </div>
+                    {:else}
+                      <span class="tx-type {tx.type}">{tx.type}</span>
+                    {/if}
                     <span class="tx-amount">{(tx.amount / 100_000_000).toFixed(8)} BTC</span>
                   </div>
                   <div class="tx-date">
@@ -818,6 +834,42 @@
   .tx-type.send {
     background: rgba(239, 68, 68, 0.12);
     color: var(--color-bitcoinOrange);
+  }
+
+  .tx-merchant-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+  }
+
+  .tx-merchant-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .tx-merchant-checkmark {
+    position: absolute;
+    left: 12px;
+    bottom: -2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #22c55e;
+    color: #ffffff;
+    font-size: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ffffff;
+  }
+
+  .tx-merchant-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #111827;
   }
 
   .tx-amount {

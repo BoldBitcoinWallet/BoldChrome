@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { psbt } from '$lib/services/psbt';
   import { walletStore, refreshWalletData, getCurrentReceiveAddress } from '$lib/stores/wallet';
   import QRScanner from './QRScanner.svelte';
@@ -24,10 +23,60 @@
   let step: 'form' | 'qr' | 'scanning' | 'broadcasting' = 'form';
   const psbtSession = psbt.session;
   let lastCompletedTxid = '';
+  let isCheckingBranta = false;
+  let brantaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let brantaMerchant: {
+      merchantId?: string;
+      merchantName: string;
+      logoUrl?: string;
+      verifyUrl?: string;
+      } | null = null;
+  let brantaLogoError = false;
 
   $: if ($psbtSession?.status === 'broadcasted' && $psbtSession.txid && $psbtSession.txid !== lastCompletedTxid) {
     lastCompletedTxid = $psbtSession.txid;
     onSuccess($psbtSession.txid);
+  }
+
+  // Reactively check Branta whenever recipientAddress changes
+  $: if (recipientAddress) {
+    handleAddressChange(recipientAddress);
+  } else {
+    brantaMerchant = null;
+  }
+
+  function handleAddressChange(addr: string) {
+    if (brantaDebounceTimer) clearTimeout(brantaDebounceTimer);
+    brantaMerchant = null;
+    brantaLogoError = false;
+
+    // Check basic address format before querying
+    if (!addr.match(/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/)) return;
+
+    brantaDebounceTimer = setTimeout(async () => {
+      isCheckingBranta = true;
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'VERIFY_BRANTA_ADDRESS',
+          address: addr,
+        });
+
+        if (response?.success && response?.data) {
+          const { payment, verifyUrl } = response.data;
+          brantaMerchant = {
+            merchantId: payment.merchantId || payment.id || payment._id,
+            merchantName: payment.merchantName || payment.name || 'Verified Merchant',
+            logoUrl: payment.logoUrl || payment.icon || payment.logo,
+            verifyUrl,
+          };
+          brantaLogoError = false;
+        }
+      } catch (err) {
+        console.warn('Branta verification error:', err);
+      } finally {
+        isCheckingBranta = false;
+      }
+    }, 400); // 400ms debounce
   }
 
   // Subscribe to QR session updates
@@ -60,6 +109,10 @@
     error = '';
 
     try {
+      // Attach any verified Branta merchant metadata to the active PSBT session
+      // so it can be persisted with the broadcast transaction.
+      psbt.setBrantaMerchant(brantaMerchant);
+
       const pairedNostrNpub = ($walletStore.pairedNostrNpub || '').trim();
 
       if (sendMode === 'dkls') {
@@ -196,7 +249,34 @@
           placeholder="bc1q... or 1... or 3..."
           class="input"
         />
+
+      {#if isCheckingBranta}
+          <div class="branta-status checking">Verifying with Branta...</div>
+        {:else if brantaMerchant}
+          <div class="branta-badge">
+            {#if brantaMerchant.logoUrl && !brantaLogoError}
+              <img
+                src={brantaMerchant.logoUrl}
+                alt={brantaMerchant.merchantName}
+                class="merchant-logo"
+                on:error={() => (brantaLogoError = true)}
+              />
+            {:else}
+              <span class="verified-icon">✓</span>
+            {/if}
+            <div class="merchant-info">
+              <span class="merchant-name">{brantaMerchant.merchantName}</span>
+              <span class="verified-tag">Branta Verified</span>
+            </div>
+            {#if brantaMerchant.verifyUrl}
+              <a href={brantaMerchant.verifyUrl} target="_blank" rel="noreferrer" class="verify-link">
+                Proof ↗
+              </a>
+            {/if}
+          </div>
+        {/if}
       </div>
+
 
       <div class="field">
         <label for="amount">Amount (BTC)</label>
@@ -575,5 +655,71 @@
   .broadcasting p {
     font-size: 16px;
     color: #a1a1aa;
+  }
+
+  .branta-status {
+    font-size: 11px;
+    color: #71717a;
+    margin-top: 4px;
+  }
+
+  .branta-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    padding: 8px 12px;
+    border-radius: 10px;
+    margin-top: 6px;
+  }
+
+  .merchant-logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .verified-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #22c55e;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .merchant-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .merchant-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  .verified-tag {
+    font-size: 10px;
+    color: #16a34a;
+    font-weight: 500;
+  }
+
+  .verify-link {
+    font-size: 11px;
+    color: #16a34a;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .verify-link:hover {
+    text-decoration: underline;
   }
 </style>
