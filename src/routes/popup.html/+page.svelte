@@ -30,7 +30,6 @@
     runHdDiscovery,
     switchAddressType,
     addressTypeUISelection,
-    removeTransaction,
   } from "$lib/stores/wallet";
   import {
     networkStore,
@@ -615,6 +614,7 @@
   let activeTxCarouselIndex = 0;
   let activeTxVisualizerTxid: string | null = null;
   let activeTxVisualizerPhase: TxVisualizerPhase = "idle";
+  let dismissedVisualizerTxids = new Set<string>();
   let clearVisualizerTimer: ReturnType<typeof setTimeout> | null = null;
   let activeTxExplorerBase = "https://mempool.space";
   let activeTxSummaryLabel = "";
@@ -626,7 +626,9 @@
       .sort((a, b) => b.timestamp - a.timestamp)
       .map((tx) => tx.txid);
 
-    activeTxIntentIds = outgoingIntents;
+    activeTxIntentIds = outgoingIntents.filter(
+      (txid) => !dismissedVisualizerTxids.has(txid),
+    );
 
     if (activeTxIntentIds.length === 0) {
       activeTxVisualizerTxid = null;
@@ -700,7 +702,22 @@
 
   function removeActiveTxIntent(): void {
     if (!activeTxVisualizerTxid) return;
-    removeTransaction(activeTxVisualizerTxid);
+    dismissedVisualizerTxids = new Set(dismissedVisualizerTxids).add(
+      activeTxVisualizerTxid,
+    );
+
+    if (activeTxIntentIds.length <= 1) {
+      activeTxVisualizerTxid = null;
+      activeTxVisualizerPhase = "idle";
+      return;
+    }
+
+    const currentIndex = activeTxIntentIds.indexOf(activeTxVisualizerTxid);
+    const nextIndex =
+      currentIndex <= 0
+        ? 1
+        : Math.min(currentIndex, activeTxIntentIds.length - 1);
+    activeTxVisualizerTxid = activeTxIntentIds[nextIndex] || null;
   }
 
   function handleTxVisualizerPhaseChange(phase: string) {

@@ -8,7 +8,7 @@ import { Point, getPublicKey, sign as ecdsaSign, verify as ecdsaVerify, schnorr,
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
 import { writable, get } from 'svelte/store';
-import { walletStore, getNextChangeAddress, getCurrentReceiveAddress, type TaggedUTXO, type BrantaMerchant, setTransactionMetadata } from '../stores/wallet';
+import { walletStore, getNextChangeAddress, getCurrentReceiveAddress, type TaggedUTXO } from '../stores/wallet';
 import { blockchain } from './blockchain';
 import { qr } from './qr';
 import { storage } from './storage';
@@ -216,6 +216,13 @@ export interface UTXO {
   };
 }
 
+export interface BrantaMerchant {
+  merchantId?: string;
+  merchantName: string;
+  logoUrl?: string;
+  verifyUrl?: string;
+}
+
 export interface PsbtSession {
   psbtId: string;
   psbt: string; // Base64 encoded PSBT
@@ -243,6 +250,33 @@ const ENABLE_LEGACY_COSIGN_FALLBACK = true;
 class PsbtService {
   private currentSession = writable<PsbtSession | null>(null);
   public session = { subscribe: this.currentSession.subscribe };
+
+  private canonicalPsbtBytes(psbtBase64: string): Uint8Array {
+    const compact = (psbtBase64 || '').trim().replace(/\s+/g, '');
+    const bytes = new Uint8Array(Buffer.from(compact, 'base64'));
+    if (
+      bytes.length < 4 ||
+      bytes[0] !== 0x70 ||
+      bytes[1] !== 0x73 ||
+      bytes[2] !== 0x62 ||
+      bytes[3] !== 0x74
+    ) {
+      throw new Error('Invalid PSBT payload (missing psbt magic bytes)');
+    }
+    return bytes;
+  }
+
+  private buildPsbtDebugSnapshot(psbtBase64: string): {
+    base64: string;
+    hex: string;
+    sha256Hex: string;
+  } {
+    const bytes = this.canonicalPsbtBytes(psbtBase64);
+    const base64 = Buffer.from(bytes).toString('base64');
+    const hex = Buffer.from(bytes).toString('hex');
+    const sha256Hex = Buffer.from(sha256(bytes)).toString('hex');
+    return { base64, hex, sha256Hex };
+  }
 
   private classifyScriptType(scriptHex: string): 'p2wpkh' | 'p2sh' | 'p2pkh' | 'p2tr' | 'unknown' {
     if (scriptHex.startsWith('0014') && scriptHex.length === 44) return 'p2wpkh';
@@ -508,6 +542,18 @@ class PsbtService {
       throw new Error('No active PSBT session');
     }
 
+    const outbound = this.buildPsbtDebugSnapshot(psbtBase64);
+    console.warn('[PSBT_SIGN_DEBUG][EXT][OUTBOUND]', {
+      txId: session.psbtId,
+      base64Len: outbound.base64.length,
+      hexLen: outbound.hex.length,
+      sha256Hex: outbound.sha256Hex,
+      base64Head: outbound.base64.slice(0, 32),
+      base64Tail: outbound.base64.slice(-32),
+      hexHead: outbound.hex.slice(0, 64),
+      hexTail: outbound.hex.slice(-64),
+    });
+
     this.currentSession.update(s => s ? {
       ...s,
       status: 'awaiting_signature',
@@ -524,11 +570,11 @@ class PsbtService {
         deliveryMode: 'nostr+qr',
         nostrState: 'pending',
       } : null);
-      void this.tryNostrCoSignDelivery(pairedNostrNpub, psbtBase64, session.psbtId);
+      void this.tryNostrCoSignDelivery(pairedNostrNpub, outbound.base64, session.psbtId);
     }
 
     // Keep QR as the universal fallback path.
-    await qr.generatePsbtQR(psbtBase64);
+    await qr.generatePsbtQR(outbound.base64);
 
     console.log('[PSBT] QR code generated. Nostr delivery state:', pairedNostrNpub ? 'pending' : 'disabled');
 
@@ -550,11 +596,27 @@ class PsbtService {
 
       const wallet = get(walletStore);
       const network = await this.resolveSessionNetwork();
+      const snapshot = this.buildPsbtDebugSnapshot(psbtBase64);
+      const psbtHex = nostrMessaging.psbtBase64ToHex(snapshot.base64);
+      const roundTripBase64 = nostrMessaging.psbtHexToBase64(psbtHex);
+      const roundTripSnapshot = this.buildPsbtDebugSnapshot(roundTripBase64);
+
+      console.warn('[PSBT_SIGN_DEBUG][EXT][SERDE]', {
+        txId,
+        outboundSha256Hex: snapshot.sha256Hex,
+        roundTripSha256Hex: roundTripSnapshot.sha256Hex,
+        base64Equal: snapshot.base64 === roundTripSnapshot.base64,
+        hexEqual: snapshot.hex === roundTripSnapshot.hex,
+      });
+
+      if (snapshot.hex !== roundTripSnapshot.hex) {
+        throw new Error('PSBT serialization mismatch before Nostr delivery (base64<->hex round-trip changed bytes)');
+      }
 
       const payload: CoSignRequestPayload = {
         txId,
-        psbtHex: nostrMessaging.psbtBase64ToHex(psbtBase64),
-        psbtBase64,
+        psbtHex,
+        psbtBase64: snapshot.base64,
         amountSats: Number(get(this.currentSession)?.amountSats || 0),
         feeSats: Number(get(this.currentSession)?.feeSats || 0),
         recipientAddress: String(get(this.currentSession)?.recipientAddress || ''),
@@ -731,7 +793,7 @@ class PsbtService {
       // Persist any Branta merchant metadata alongside this transaction so it
       // can be rendered in the transaction history.
       if (session.brantaMerchant) {
-        await setTransactionMetadata(txid, { brantaMerchant: session.brantaMerchant });
+        await this.setTransactionMetadata(txid, { brantaMerchant: session.brantaMerchant });
       }
 
       console.log('[PSBT] Transaction broadcasted:', txid);
@@ -767,6 +829,25 @@ class PsbtService {
    */
   setBrantaMerchant(merchant: BrantaMerchant | null) {
     this.currentSession.update(s => s && merchant ? { ...s, brantaMerchant: merchant } : s);
+  }
+
+  /**
+   * Persist metadata for a specific transaction.
+   */
+  private async setTransactionMetadata(
+    txid: string,
+    metadata: { brantaMerchant?: BrantaMerchant },
+  ): Promise<void> {
+    try {
+      const raw = await storage.get<string>('txMetadata');
+      const existing: Record<string, { brantaMerchant?: BrantaMerchant }> = raw
+        ? JSON.parse(raw)
+        : {};
+      existing[txid] = {...existing[txid], ...metadata};
+      await storage.set('txMetadata', JSON.stringify(existing));
+    } catch (err) {
+      console.warn('[PSBT] Failed to persist transaction metadata', err);
+    }
   }
 
   /**
