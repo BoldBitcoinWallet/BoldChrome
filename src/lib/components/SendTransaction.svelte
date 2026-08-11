@@ -33,6 +33,71 @@
       } | null = null;
   let brantaLogoError = false;
 
+  function hasBrantaPayloadMarkers(value: string): boolean {
+    const lower = value.toLowerCase();
+    return (
+      lower.includes('branta_id=') ||
+      lower.includes('branta_secret=') ||
+      lower.includes('/v2/verify/') ||
+      lower.includes('k-')
+    );
+  }
+
+  function parseBitcoinAddressInput(value: string): string | null {
+    const candidate = (value || '').trim();
+    if (!candidate) return null;
+    if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(candidate)) return candidate;
+
+    if (candidate.toLowerCase().startsWith('bitcoin:')) {
+      const rest = candidate.slice(8).split('?')[0].trim();
+      if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(rest)) return rest;
+    }
+
+    if (candidate.includes('|')) {
+      const maybe = candidate.split('|')[0].trim();
+      if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(maybe)) return maybe;
+    }
+
+    return null;
+  }
+
+  function buildBrantaLookupInput(value: string): { payload: string; isQrCode: boolean } | null {
+    const candidate = (value || '').trim();
+    if (!candidate) return null;
+
+    if (hasBrantaPayloadMarkers(candidate)) {
+      return { payload: candidate, isQrCode: true };
+    }
+
+    const extractedAddress = parseBitcoinAddressInput(candidate);
+    if (!extractedAddress) return null;
+
+    return {
+      payload: hasBrantaPayloadMarkers(candidate) ? candidate : extractedAddress,
+      isQrCode: hasBrantaPayloadMarkers(candidate),
+    };
+  }
+
+  function normalizeBrantaLogoUrl(rawUrl?: string): string | undefined {
+    if (!rawUrl) return undefined;
+    const normalizedInput = rawUrl.trim();
+    if (!normalizedInput) return undefined;
+
+    if (normalizedInput.startsWith('//')) return `https:${normalizedInput}`;
+    if (normalizedInput.startsWith('ipfs://')) {
+      const cidPath = normalizedInput.replace(/^ipfs:\/\//i, '').replace(/^ipfs\//i, '');
+      return `https://ipfs.io/ipfs/${cidPath}`;
+    }
+    if (/^https?:\/\//i.test(normalizedInput) || normalizedInput.startsWith('data:') || normalizedInput.startsWith('blob:')) {
+      return normalizedInput;
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}($|\/)/i.test(normalizedInput)) {
+      return `https://${normalizedInput}`;
+    }
+
+    return normalizedInput;
+  }
+
   $: if ($psbtSession?.status === 'broadcasted' && $psbtSession.txid && $psbtSession.txid !== lastCompletedTxid) {
     lastCompletedTxid = $psbtSession.txid;
     onSuccess($psbtSession.txid);
@@ -50,26 +115,51 @@
     brantaMerchant = null;
     brantaLogoError = false;
 
-    // Check basic address format before querying
-    if (!addr.match(/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/)) return;
+    const lookupInput = buildBrantaLookupInput(addr);
+    if (!lookupInput) {
+      if (addr.trim().length > 0) {
+        console.log('[Branta][SendTransaction] Address skipped (failed local validation)', {
+          address: addr,
+          length: addr.trim().length,
+        });
+      }
+      return;
+    }
 
     brantaDebounceTimer = setTimeout(async () => {
       isCheckingBranta = true;
+      console.log('[Branta][SendTransaction] Lookup start', {
+        address: addr,
+        payloadPreview: `${lookupInput.payload.slice(0, 24)}${lookupInput.payload.length > 24 ? '...' : ''}`,
+        isQrCode: lookupInput.isQrCode,
+        network: $walletStore.network,
+      });
       try {
         const response = await chrome.runtime.sendMessage({
           type: 'VERIFY_BRANTA_ADDRESS',
-          address: addr,
+          address: lookupInput.payload,
+          isQrCode: lookupInput.isQrCode,
+          network: $walletStore.network,
         });
 
         if (response?.success && response?.data) {
           const { payment, verifyUrl } = response.data;
           brantaMerchant = {
             merchantId: payment.merchantId || payment.id || payment._id,
-            merchantName: payment.merchantName || payment.name || 'Verified Merchant',
-            logoUrl: payment.logoUrl || payment.icon || payment.logo,
+            merchantName: payment.merchantName || payment.name || payment.displayName || payment.platform || 'Verified Merchant',
+            logoUrl: normalizeBrantaLogoUrl(payment.logoUrl || payment.platformLogoUrl || payment.icon || payment.logo),
             verifyUrl,
           };
           brantaLogoError = false;
+          console.log('[Branta][SendTransaction] Lookup success', {
+            hasMerchant: !!brantaMerchant,
+            logoUrl: brantaMerchant.logoUrl || null,
+            merchantName: brantaMerchant.merchantName,
+          });
+        } else {
+          console.log('[Branta][SendTransaction] Lookup returned no data', {
+            response,
+          });
         }
       } catch (err) {
         console.warn('Branta verification error:', err);
@@ -88,13 +178,14 @@
   $: totalBTC = (totalSats / 100_000_000).toFixed(8);
 
   async function handleCreatePsbt() {
-    if (!recipientAddress || !amountBTC || parseFloat(amountBTC) <= 0) {
+    const resolvedRecipientAddress = parseBitcoinAddressInput(recipientAddress);
+    if (!resolvedRecipientAddress || !amountBTC || parseFloat(amountBTC) <= 0) {
       error = 'Please fill in all fields';
       return;
     }
 
     // Validate address format
-    if (!recipientAddress.match(/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,90}$/)) {
+    if (!resolvedRecipientAddress.match(/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/)) {
       error = 'Invalid Bitcoin address';
       return;
     }
@@ -119,7 +210,7 @@
         // Regular DKLS MPC Transaction: never build/send a PSBT. The paired mobile
         // device signs with its own DKLS committee peer and broadcasts itself.
         if (pairedNostrNpub) {
-          const { qrDataUrl } = await psbt.requestNativeSend({ recipientAddress, amountSats, feeRate });
+          const { qrDataUrl } = await psbt.requestNativeSend({ recipientAddress: resolvedRecipientAddress, amountSats, feeRate });
           // Strictly airgapped initiation: extension only shows QR for mobile scan.
           psbtQRData = qrDataUrl;
           lastPayload = '';
@@ -137,7 +228,7 @@
         // which mobile already recognizes as a native, non-PSBT send request.
         const addressType = $walletStore.hdState?.addressType || 'segwit-native';
         const derivationPath = getCurrentReceiveAddress()?.path || '';
-        const res = await qr.generateSendQR(recipientAddress, amountSats, estimatedFee, '', addressType, derivationPath, $walletStore.network);
+        const res = await qr.generateSendQR(resolvedRecipientAddress, amountSats, estimatedFee, '', addressType, derivationPath, $walletStore.network);
         psbtQRData = res.dataUrl;
         lastPayload = res.payload;
         qrMode = 'send';
@@ -153,7 +244,7 @@
       // Standard PSBT Export: explicit user choice to build and hand off a real PSBT,
       // regardless of pairing type (e.g. for external co-signers or interoperability).
       const { psbtBase64, feeSats } = await psbt.createPsbt({
-        recipientAddress,
+        recipientAddress: resolvedRecipientAddress,
         amountSats,
         feeRate
       });

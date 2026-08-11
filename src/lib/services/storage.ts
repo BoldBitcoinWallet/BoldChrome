@@ -44,6 +44,8 @@ export interface StorageData {
 
   // Transaction metadata keyed by txid (JSON stringified)
   txMetadata?: string;
+  // Pending merchant metadata for outgoing txs that may be broadcast externally
+  pendingBrantaMetadata?: string;
 }
 
 /**

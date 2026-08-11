@@ -233,7 +233,6 @@ class BlockchainService {
   setNetwork(network: 'mainnet' | 'testnet') {
     this.network = network;
     this.syncPublicHostsFromBaseUrl();
-    console.log(`[Blockchain] Network set to ${network}`);
   }
 
   setTestnetVariant(variant: 'testnet' | 'testnet4'): void {
@@ -243,7 +242,6 @@ class BlockchainService {
         ? DEFAULT_TESTNET_API_TESTNET4
         : DEFAULT_TESTNET_API_TESTNET;
     this.clearCache();
-    console.log('[Blockchain] Testnet API variant set to', variant, this.testnetUrl);
   }
 
   setMempoolMainnet(url: string | null | undefined): void {
@@ -254,7 +252,6 @@ class BlockchainService {
     }
     this.clearCache();
     this.syncPublicHostsFromBaseUrl();
-    console.log('[Blockchain] Mainnet API set to', this.baseUrl);
   }
 
   getMempoolDisplayName(): string {
@@ -293,7 +290,6 @@ class BlockchainService {
 
   async getAddressStats(address: string): Promise<AddressStats> {
     this.assertAddressMatchesActiveNetwork(address, 'getAddressStats');
-    console.log('[Blockchain] Fetching address stats:', address);
     const url = `${this.getBaseUrl()}/address/${address}`;
     try {
       return await this.fetchJsonEsploraWith429Retries<AddressStats>(
@@ -327,7 +323,6 @@ class BlockchainService {
 
   async getUTXOs(address: string): Promise<UTXO[]> {
     this.assertAddressMatchesActiveNetwork(address, 'getUTXOs');
-    console.log('[Blockchain] Fetching UTXOs for:', address);
     const url = `${this.getBaseUrl()}/address/${address}/utxo`;
     try {
       return await this.fetchJsonEsploraWith429Retries<UTXO[]>(url, 'UTXOs');
@@ -342,8 +337,6 @@ class BlockchainService {
     afterTxid?: string,
   ): Promise<Transaction[]> {
     this.assertAddressMatchesActiveNetwork(address, 'getTransactions');
-    console.log('[Blockchain] Fetching transactions for:', address);
-
     let url = `${this.getBaseUrl()}/address/${address}/txs`;
     if (afterTxid) {
       url += `/chain/${afterTxid}`;
@@ -361,7 +354,6 @@ class BlockchainService {
   }
 
   async getTransaction(txid: string): Promise<Transaction> {
-    console.log('[Blockchain] Fetching transaction:', txid);
     const url = `${this.getBaseUrl()}/tx/${txid}`;
     try {
       const res = await mempoolClient.get<Transaction>(url, {
@@ -378,7 +370,6 @@ class BlockchainService {
   }
 
   async getTransactionHex(txid: string): Promise<string> {
-    console.log('[Blockchain] Fetching transaction hex:', txid);
     const url = `${this.getBaseUrl()}/tx/${txid}/hex`;
     try {
       const res = await mempoolClient.getText(url, { timeoutMs: FETCH_TIMEOUT_MS });
@@ -393,14 +384,16 @@ class BlockchainService {
   }
 
   async getFeeEstimates(): Promise<RecommendedFees> {
-    console.log('[Blockchain] Fetching fee estimates');
     const url = `${this.getBaseUrl()}/v1/fees/recommended`;
     try {
       const fees = await this.fetchRecommendedFeesFromUrl(url);
-      console.log('[Blockchain] Fee estimates:', fees);
       return fees;
     } catch (error) {
-      console.error('[Blockchain] Error fetching fee estimates:', error);
+      const primaryMessage = error instanceof Error ? error.message : String(error);
+      console.warn('[Blockchain] Fee estimates unavailable on primary endpoint; attempting fallback.', {
+        endpoint: url,
+        reason: primaryMessage,
+      });
       if (this.network === 'testnet') {
         const alternateBase =
           this.testnetVariant === 'testnet4'
@@ -412,7 +405,11 @@ class BlockchainService {
           console.warn('[Blockchain] Fee estimates recovered via alternate testnet API:', alternateBase);
           return altFees;
         } catch (altError) {
-          console.warn('[Blockchain] Alternate testnet fee endpoint also failed:', altError);
+          const altMessage = altError instanceof Error ? altError.message : String(altError);
+          console.warn('[Blockchain] Alternate testnet fee endpoint also failed; using static fallback fees.', {
+            endpoint: alternateUrl,
+            reason: altMessage,
+          });
         }
       }
 
@@ -422,7 +419,6 @@ class BlockchainService {
   }
 
   async broadcastTransaction(txHex: string): Promise<string> {
-    console.log('[Blockchain] Broadcasting transaction');
     const url = `${this.getBaseUrl()}/tx`;
     try {
       const res = await mempoolClient.postPlain(url, txHex, {
@@ -432,7 +428,6 @@ class BlockchainService {
         throw new Error(`Broadcast failed: ${res.data || res.status}`);
       }
       const txid = res.data;
-      console.log('[Blockchain] Transaction broadcasted:', txid);
       return txid;
     } catch (error) {
       console.error('[Blockchain] Error broadcasting transaction:', error);
@@ -441,7 +436,6 @@ class BlockchainService {
   }
 
   async getBlockHeight(): Promise<number> {
-    console.log('[Blockchain] Fetching block height');
     const url = `${this.getBaseUrl()}/blocks/tip/height`;
     try {
       const res = await mempoolClient.getText(url, { timeoutMs: FETCH_TIMEOUT_MS });
@@ -501,7 +495,6 @@ class BlockchainService {
 
   clearCache() {
     mempoolClient.invalidateAll();
-    console.log('[Blockchain] Cache cleared');
   }
 }
 

@@ -11,6 +11,13 @@ import { setNetwork as setNetworkStore } from './network';
 
 const HD_DISCOVERY_STALE_MS = 2 * 60 * 60 * 1000; // 2 hours
 
+export interface BrantaMerchant {
+  merchantId?: string;
+  merchantName: string;
+  logoUrl?: string;
+  verifyUrl?: string;
+}
+
 export interface Transaction {
   txid: string;
   timestamp: number;
@@ -21,6 +28,7 @@ export interface Transaction {
   address: string;
   from?: string;
   to?: string;
+  brantaMerchant?: BrantaMerchant;
 }
 
 export interface DerivedAddress {
@@ -872,6 +880,71 @@ function mapRawTxMultiAddress(tx: any, walletAddresses: Set<string>): Transactio
   };
 }
 
+type TransactionMetadata = { brantaMerchant?: BrantaMerchant };
+
+type PendingBrantaMetadata = {
+  recipientAddress: string;
+  amountSats: number;
+  createdAt: number;
+  brantaMerchant: BrantaMerchant;
+};
+
+async function getTransactionMetadataMap(): Promise<Record<string, TransactionMetadata>> {
+  try {
+    const raw = await storage.get<string>('txMetadata');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed as Record<string, TransactionMetadata>;
+  } catch (err) {
+    console.warn('[Wallet] Failed to read tx metadata from storage', err);
+    return {};
+  }
+}
+
+async function getPendingBrantaMetadata(): Promise<PendingBrantaMetadata[]> {
+  try {
+    const raw = await storage.get<string>('pendingBrantaMetadata');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const now = Date.now();
+    return (parsed as PendingBrantaMetadata[]).filter(item => {
+      if (!item || typeof item !== 'object') return false;
+      if (!item.recipientAddress || !item.brantaMerchant) return false;
+      if (typeof item.amountSats !== 'number' || typeof item.createdAt !== 'number') return false;
+      return now - item.createdAt < 72 * 60 * 60 * 1000;
+    });
+  } catch (err) {
+    console.warn('[Wallet] Failed to read pending Branta metadata from storage', err);
+    return [];
+  }
+}
+
+function applyTransactionMetadata(
+  tx: Transaction,
+  metadataMap: Record<string, TransactionMetadata>,
+  pendingMetadata: PendingBrantaMetadata[],
+): Transaction {
+  const meta = metadataMap[tx.txid];
+  if (meta?.brantaMerchant) {
+    return { ...tx, brantaMerchant: meta.brantaMerchant };
+  }
+
+  if (tx.type !== 'send' || tx.brantaMerchant || !tx.to) return tx;
+
+  const txTimeMs = tx.timestamp * 1000;
+  const matchedPending = pendingMetadata.find(item =>
+    item.recipientAddress === tx.to &&
+    item.amountSats === tx.amount &&
+    txTimeMs >= item.createdAt - 5 * 60 * 1000 &&
+    txTimeMs <= item.createdAt + 72 * 60 * 60 * 1000,
+  );
+
+  if (!matchedPending?.brantaMerchant) return tx;
+  return { ...tx, brantaMerchant: matchedPending.brantaMerchant };
+}
+
 /**
  * Refresh wallet data from blockchain API.
  * Aggregates balance, transactions, and UTXOs across all HD addresses.
@@ -925,6 +998,8 @@ export async function refreshWalletData() {
   }
 
   const allAddressStrings = new Set(addresses.map(a => a.address));
+  const txMetadataMap = await getTransactionMetadataMap();
+  const pendingBrantaMetadata = await getPendingBrantaMetadata();
 
   try {
     // Aggregate balance across all addresses
@@ -952,7 +1027,8 @@ export async function refreshWalletData() {
         const txHistory = await blockchain.getTransactions(addr.address);
         for (const rawTx of txHistory) {
           if (!txMap.has(rawTx.txid)) {
-            txMap.set(rawTx.txid, mapRawTxMultiAddress(rawTx, allAddressStrings));
+            const mapped = mapRawTxMultiAddress(rawTx, allAddressStrings);
+            txMap.set(rawTx.txid, applyTransactionMetadata(mapped, txMetadataMap, pendingBrantaMetadata));
           }
         }
       } catch {
@@ -1025,6 +1101,8 @@ export async function fetchMoreTransactions() {
   }
 
   const allAddressStrings = new Set(addresses.map(a => a.address));
+  const txMetadataMap = await getTransactionMetadataMap();
+  const pendingBrantaMetadata = await getPendingBrantaMetadata();
 
   try {
     const txMap = new Map<string, Transaction>();
@@ -1033,7 +1111,8 @@ export async function fetchMoreTransactions() {
         const nextPage = await blockchain.getTransactions(addr.address, lastTxid);
         for (const rawTx of nextPage) {
           if (!txMap.has(rawTx.txid)) {
-            txMap.set(rawTx.txid, mapRawTxMultiAddress(rawTx, allAddressStrings));
+            const mapped = mapRawTxMultiAddress(rawTx, allAddressStrings);
+            txMap.set(rawTx.txid, applyTransactionMetadata(mapped, txMetadataMap, pendingBrantaMetadata));
           }
         }
       } catch {

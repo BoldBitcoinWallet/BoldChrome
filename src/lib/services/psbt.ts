@@ -238,6 +238,13 @@ export interface PsbtSession {
   brantaMerchant?: BrantaMerchant;
 }
 
+interface PendingBrantaMetadata {
+  recipientAddress: string;
+  amountSats: number;
+  createdAt: number;
+  brantaMerchant: BrantaMerchant;
+}
+
 export interface CreatePsbtParams {
   recipientAddress: string;
   amountSats: number;
@@ -249,6 +256,7 @@ const ENABLE_LEGACY_COSIGN_FALLBACK = true;
 
 class PsbtService {
   private currentSession = writable<PsbtSession | null>(null);
+  private pendingBrantaMerchant: BrantaMerchant | null = null;
   public session = { subscribe: this.currentSession.subscribe };
 
   private canonicalPsbtBytes(psbtBase64: string): Uint8Array {
@@ -456,6 +464,7 @@ class PsbtService {
     this.logExtensionPreSignDiagnostics(psbt, selectedUtxos, prevOuts);
     
     const psbtId = `psbt-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const brantaMerchant = this.pendingBrantaMerchant || undefined;
     this.currentSession.set({
       psbtId,
       psbt: psbtBase64,
@@ -463,8 +472,13 @@ class PsbtService {
       createdAt: Date.now(),
       recipientAddress,
       amountSats,
-      feeSats: actualFee
+      feeSats: actualFee,
+      brantaMerchant,
     });
+
+    if (brantaMerchant) {
+      await this.addPendingBrantaMetadata(recipientAddress, amountSats, brantaMerchant);
+    }
 
     return { psbtBase64, feeSats: actualFee, psbtId, utxosJson, changeAddress: changeAddr?.address || '' };
   }
@@ -517,6 +531,7 @@ class PsbtService {
       psbtId,
     );
 
+    const brantaMerchant = this.pendingBrantaMerchant || undefined;
     this.currentSession.set({
       psbtId,
       psbt: '',
@@ -527,7 +542,12 @@ class PsbtService {
       feeSats: estimatedFee,
       deliveryMode: 'qr',
       nostrState: 'idle',
+      brantaMerchant,
     });
+
+    if (brantaMerchant) {
+      await this.addPendingBrantaMetadata(recipientAddress, amountSats, brantaMerchant);
+    }
 
     return { psbtId, qrDataUrl };
   }
@@ -795,6 +815,7 @@ class PsbtService {
       if (session.brantaMerchant) {
         await this.setTransactionMetadata(txid, { brantaMerchant: session.brantaMerchant });
       }
+      this.pendingBrantaMerchant = null;
 
       console.log('[PSBT] Transaction broadcasted:', txid);
       return txid;
@@ -821,6 +842,7 @@ class PsbtService {
    */
   clearSession() {
     this.currentSession.set(null);
+    this.pendingBrantaMerchant = null;
   }
 
   /**
@@ -828,7 +850,39 @@ class PsbtService {
    * with the transaction once it is broadcast.
    */
   setBrantaMerchant(merchant: BrantaMerchant | null) {
-    this.currentSession.update(s => s && merchant ? { ...s, brantaMerchant: merchant } : s);
+    this.pendingBrantaMerchant = merchant;
+    this.currentSession.update(s => {
+      if (!s) return s;
+      if (!merchant) {
+        const next = { ...s };
+        delete next.brantaMerchant;
+        return next;
+      }
+      return { ...s, brantaMerchant: merchant };
+    });
+  }
+
+  private async addPendingBrantaMetadata(
+    recipientAddress: string,
+    amountSats: number,
+    brantaMerchant: BrantaMerchant,
+  ): Promise<void> {
+    try {
+      const key = 'pendingBrantaMetadata';
+      const raw = await storage.get<string>(key);
+      const existing: PendingBrantaMetadata[] = raw ? JSON.parse(raw) : [];
+      const now = Date.now();
+      const fresh = existing.filter(item => now - item.createdAt < 72 * 60 * 60 * 1000);
+      fresh.push({
+        recipientAddress,
+        amountSats,
+        createdAt: now,
+        brantaMerchant,
+      });
+      await storage.set(key, JSON.stringify(fresh.slice(-50)));
+    } catch (err) {
+      console.warn('[PSBT] Failed to persist pending Branta metadata', err);
+    }
   }
 
   /**

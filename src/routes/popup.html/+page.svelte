@@ -169,6 +169,15 @@
   const isExpandedView =
     typeof window !== "undefined" &&
     window.innerWidth > 600;
+  let isHeaderUtilitiesExpanded = false;
+
+  function toggleHeaderUtilities(): void {
+    isHeaderUtilitiesExpanded = !isHeaderUtilitiesExpanded;
+  }
+
+  $: if (!showMainApp && isHeaderUtilitiesExpanded) {
+    isHeaderUtilitiesExpanded = false;
+  }
 
   function openExpandedView() {
     if (typeof chrome !== "undefined" && chrome.runtime?.getURL && chrome.tabs) {
@@ -204,13 +213,6 @@
   $: keyshareFingerprintDisplay = computeKeyshareFingerprint(
     $walletStore.publicKey,
   );
-
-  // Debug logging
-  $: console.log("[popup.html] Wallet state:", {
-    publicKey: $walletStore.publicKey?.substring(0, 20) + "...",
-    address: $walletStore.address,
-    isPaired,
-  });
 
   type Tx = {
     id: string;
@@ -734,6 +736,19 @@
   let showReceive = false;
   let sendAmount = "";
   let sendAddress = "";
+  let isVerifying = false;
+  let brantaResult: {
+    merchantId?: string;
+    merchantName: string;
+    logoUrl?: string;
+    verifyUrl?: string;
+    isFlagged?: boolean;
+    riskLabel?: string;
+  } | null = null;
+  let brantaError: string | null = null;
+  let brantaLogoLoadFailed = false;
+  let brantaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let brantaLookupSeq = 0;
   let sendMode: "dkls" | "psbt" = "dkls";
   let showSendAddressScanner = false;
   let receiveAddress = ""; // Will be populated from store
@@ -953,10 +968,304 @@
     return null;
   }
 
+  function isValidBitcoinAddressForBranta(value: string): boolean {
+    const candidate = (value || "").trim();
+    if (candidate.length < 26 || candidate.length > 90) return false;
+    return /^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(candidate);
+  }
+
+  let sendBrantaLookupOverride: { address: string; payload: string } | null = null;
+
+  function hasBrantaPayloadMarkers(value: string): boolean {
+    const lower = value.toLowerCase();
+    return (
+      lower.includes("branta_id=") ||
+      lower.includes("branta_secret=") ||
+      lower.includes("/v2/verify/") ||
+      lower.includes("k-")
+    );
+  }
+
+  function parseBrantaLookupInput(value: string): {
+    shouldLookup: boolean;
+    payload?: string;
+    isQrCode?: boolean;
+  } {
+    const candidate = (value || "").trim();
+    if (!candidate) return { shouldLookup: false };
+
+    if (hasBrantaPayloadMarkers(candidate)) {
+      return {
+        shouldLookup: true,
+        payload: candidate,
+        isQrCode: true,
+      };
+    }
+
+    if (isValidBitcoinAddressForBranta(candidate)) {
+      return {
+        shouldLookup: true,
+        payload: candidate,
+        isQrCode: false,
+      };
+    }
+
+    return { shouldLookup: false };
+  }
+
+  function clearBrantaState(): void {
+    isVerifying = false;
+    brantaResult = null;
+    brantaError = null;
+    brantaLogoLoadFailed = false;
+  }
+
+  function parseBrantaResult(data: unknown): {
+    merchantId?: string;
+    merchantName: string;
+    logoUrl?: string;
+    verifyUrl?: string;
+    isFlagged?: boolean;
+    riskLabel?: string;
+  } | null {
+    const payload = data as { payment?: Record<string, unknown>; verifyUrl?: string } | null;
+    if (!payload?.payment) return null;
+
+    const payment = payload.payment;
+    const merchantRecord =
+      typeof payment.merchant === "object" && payment.merchant !== null
+        ? (payment.merchant as Record<string, unknown>)
+        : null;
+
+    const firstString = (...values: unknown[]): string | undefined => {
+      for (const value of values) {
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed) return trimmed;
+        }
+      }
+      return undefined;
+    };
+
+    const nestedLogoUrl =
+      typeof payment.logo === "object" && payment.logo !== null
+        ? firstString((payment.logo as Record<string, unknown>).url, (payment.logo as Record<string, unknown>).src)
+        : undefined;
+
+    const nestedMerchantLogoUrl =
+      merchantRecord && typeof merchantRecord.logo === "object" && merchantRecord.logo !== null
+        ? firstString(
+            (merchantRecord.logo as Record<string, unknown>).url,
+            (merchantRecord.logo as Record<string, unknown>).src
+          )
+        : undefined;
+
+    const metadataLogoUrl =
+      typeof payment.metadata === "object" && payment.metadata !== null
+        ? firstString(
+            (payment.metadata as Record<string, unknown>).logoUrl,
+            (payment.metadata as Record<string, unknown>).logo
+          )
+        : undefined;
+
+    const normalizeLogoUrl = (rawUrl?: string): string | undefined => {
+      if (!rawUrl) return undefined;
+      const normalizedInput = rawUrl.trim();
+      if (!normalizedInput) return undefined;
+      try {
+        if (normalizedInput.startsWith("//")) {
+          return `https:${normalizedInput}`;
+        }
+        if (normalizedInput.startsWith("ipfs://")) {
+          const cidPath = normalizedInput.replace(/^ipfs:\/\//i, "").replace(/^ipfs\//i, "");
+          return `https://ipfs.io/ipfs/${cidPath}`;
+        }
+        if (/^https?:\/\//i.test(normalizedInput) || normalizedInput.startsWith("data:") || normalizedInput.startsWith("blob:")) {
+          return normalizedInput;
+        }
+        // Handle relative paths returned by API payloads.
+        if (normalizedInput.startsWith("/")) {
+          if (typeof payload?.verifyUrl === "string" && payload.verifyUrl.trim()) {
+            const base = new URL(payload.verifyUrl);
+            return new URL(normalizedInput, `${base.protocol}//${base.host}`).toString();
+          }
+          return new URL(normalizedInput, "https://branta.pro").toString();
+        }
+        // Normalize scheme-less host paths like cdn.example.com/logo.png
+        if (/^[a-z0-9.-]+\.[a-z]{2,}($|\/)/i.test(normalizedInput)) {
+          return `https://${normalizedInput}`;
+        }
+      } catch {
+        return normalizedInput;
+      }
+      return normalizedInput;
+    };
+
+    const merchantName = String(
+      payment.merchantName ||
+        payment.name ||
+        payment.displayName ||
+        payment.platform ||
+        merchantRecord?.merchantName ||
+        merchantRecord?.name ||
+        merchantRecord?.displayName ||
+        merchantRecord?.brandName ||
+        merchantRecord?.organizationName ||
+        "Verified Merchant"
+    ).trim();
+
+    const status = String(payment.status || "").toLowerCase();
+    const riskLevel = String(payment.riskLevel || payment.risk || "").toLowerCase();
+    const flagged =
+      payment.isFlagged === true ||
+      status === "flagged" ||
+      status === "blocked" ||
+      status === "suspicious" ||
+      riskLevel === "high" ||
+      riskLevel === "critical";
+
+    const parsed = {
+      merchantId: String(
+        payment.merchantId ||
+          payment.id ||
+          payment._id ||
+          merchantRecord?.merchantId ||
+          merchantRecord?.id ||
+          merchantRecord?._id ||
+          ""
+      ).trim() || undefined,
+      merchantName,
+      logoUrl: normalizeLogoUrl(
+        firstString(
+          payment.logoUrl,
+          payment.platformLogoUrl,
+          payment.avatar,
+          payment.image,
+          payment.imageUrl,
+          payment.icon,
+          payment.logo,
+          merchantRecord?.logoUrl,
+          merchantRecord?.avatar,
+          merchantRecord?.image,
+          merchantRecord?.imageUrl,
+          merchantRecord?.icon,
+          merchantRecord?.logo,
+          nestedLogoUrl,
+          nestedMerchantLogoUrl,
+          metadataLogoUrl
+        )
+      ),
+      verifyUrl: String(payload.verifyUrl || payment.verifyUrl || "").trim() || undefined,
+      isFlagged: flagged,
+      riskLabel: flagged ? (riskLevel || status || "flagged") : undefined,
+    };
+
+    return parsed;
+  }
+
+  async function runBrantaLookup(
+    lookupPayload: string,
+    sourceValue: string,
+    isQrCode: boolean
+  ): Promise<void> {
+    const currentLookupSeq = ++brantaLookupSeq;
+    const lookupAddress = (sourceValue || "").trim();
+    isVerifying = true;
+    brantaError = null;
+    brantaLogoLoadFailed = false;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: "VERIFY_BRANTA_ADDRESS",
+        address: lookupPayload,
+        isQrCode,
+        network: $walletStore.network,
+      });
+
+      // Ignore stale responses from prior lookups (common while typing/pasting).
+      if (currentLookupSeq !== brantaLookupSeq || lookupAddress !== (sendAddress || "").trim()) {
+        return;
+      }
+
+      if (!response?.success || !response?.data) {
+        brantaResult = null;
+        return;
+      }
+
+      brantaResult = parseBrantaResult(response.data);
+    } catch (error) {
+      if (currentLookupSeq !== brantaLookupSeq || lookupAddress !== (sendAddress || "").trim()) {
+        return;
+      }
+      console.warn("[Branta][SendBTC] Lookup errored", {
+        lookupSeq: currentLookupSeq,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      brantaResult = null;
+      brantaError = "Unable to verify with Branta right now.";
+    } finally {
+      if (currentLookupSeq === brantaLookupSeq) {
+        isVerifying = false;
+      }
+    }
+  }
+
+  function scheduleBrantaLookup(value: string): void {
+    const candidate = (value || "").trim();
+    if (brantaDebounceTimer) {
+      clearTimeout(brantaDebounceTimer);
+      brantaDebounceTimer = null;
+    }
+
+    if (
+      sendBrantaLookupOverride &&
+      sendBrantaLookupOverride.address !== candidate
+    ) {
+      sendBrantaLookupOverride = null;
+    }
+
+    const lookupCandidate =
+      sendBrantaLookupOverride && sendBrantaLookupOverride.address === candidate
+        ? {
+            shouldLookup: true,
+            payload: sendBrantaLookupOverride.payload,
+            isQrCode: true,
+          }
+        : parseBrantaLookupInput(candidate);
+
+    if (!lookupCandidate.shouldLookup || !lookupCandidate.payload) {
+      if (candidate.length > 0) {
+      }
+      clearBrantaState();
+      return;
+    }
+
+    brantaDebounceTimer = setTimeout(() => {
+      void runBrantaLookup(
+        lookupCandidate.payload!,
+        candidate,
+        lookupCandidate.isQrCode === true
+      );
+    }, 400);
+  }
+
+  $: if (showSend) {
+    scheduleBrantaLookup(sendAddress);
+  } else {
+    if (brantaDebounceTimer) {
+      clearTimeout(brantaDebounceTimer);
+      brantaDebounceTimer = null;
+    }
+    clearBrantaState();
+  }
+
   function handleSendAddressScanned(qrData: string) {
     const addr = extractAddressFromQR(qrData);
     if (addr) {
       sendAddress = addr;
+      if (hasBrantaPayloadMarkers(qrData)) {
+        sendBrantaLookupOverride = { address: addr, payload: qrData.trim() };
+      }
       triggerToast("Address scanned", "success");
     } else {
       triggerToast("No Bitcoin address found in QR", "error");
@@ -1156,7 +1465,6 @@
 
     try {
       pairingStatus = "Processing scanned response...";
-      console.log("[popup.html] Processing scanned QR from camera");
       const result = await qr.processScanedQR(qrData);
       // If we got a short numeric pairing code, instruct the user and show manual input
       if (result && result.type === "pairing_code") {
@@ -1385,9 +1693,6 @@
       triggerToast("Wallet Loaded", "success");
       setTimeout(() => {
         // Ensure navigation only happens when needed and use a robust extension URL fallback
-        console.log(
-          "[popup.html] Navigating to popup.html after fetchWalletDataAndHandleStatus (using location fallback)",
-        );
         pairingStep = 0;
         if (
           typeof chrome !== "undefined" &&
@@ -1396,7 +1701,6 @@
         ) {
           const popupUrl = chrome.runtime.getURL("popup.html");
           if (typeof window !== "undefined" && location.href !== popupUrl) {
-            console.log("[popup.html] location.href ->", popupUrl);
             location.href = popupUrl;
           }
         } else if (
@@ -1453,6 +1757,7 @@
   async function openSend() {
     sendAmount = "";
     sendAddress = "";
+    clearBrantaState();
     showSendAddressScanner = false;
     sendFeeEstimates = null;
     sendUtxos = null;
@@ -1515,6 +1820,11 @@
   function closeModals() {
     showSend = false;
     showReceive = false;
+    if (brantaDebounceTimer) {
+      clearTimeout(brantaDebounceTimer);
+      brantaDebounceTimer = null;
+    }
+    clearBrantaState();
     message = "";
   }
 
@@ -1541,6 +1851,17 @@
       const wallet = get(walletStore);
       const candidate = resolveNetworkAddressCandidate(wallet);
       const network = candidate.network;
+
+      if (brantaResult && !brantaResult.isFlagged) {
+        psbt.setBrantaMerchant({
+          merchantId: brantaResult.merchantId,
+          merchantName: brantaResult.merchantName,
+          logoUrl: brantaResult.logoUrl,
+          verifyUrl: brantaResult.verifyUrl,
+        });
+      } else {
+        psbt.setBrantaMerchant(null);
+      }
 
       if (wallet.network !== network) {
         await setNetwork(network);
@@ -1789,6 +2110,10 @@
   }
 
   onDestroy(() => {
+    if (brantaDebounceTimer) {
+      clearTimeout(brantaDebounceTimer);
+      brantaDebounceTimer = null;
+    }
     if (clearVisualizerTimer) {
       clearTimeout(clearVisualizerTimer);
       clearVisualizerTimer = null;
@@ -1796,7 +2121,6 @@
   });
 
   onMount(async () => {
-    console.log("[popup.html] onMount - initializing wallet store");
     await initializeWalletStore();
     await loadPinHash();
     await loadMempoolFromStorage();
@@ -1991,34 +2315,75 @@
               height="20"
             />
           </button>
-          <button
-            class:refresh-btn={true}
-            class:spinning={isRefreshing}
-            on:click={handleRefresh}
-            disabled={isRefreshing}
-            title="Refresh wallet data"
+          <div
+            id="header-secondary-utils"
+            class="header-secondary-utils"
+            class:expanded={isHeaderUtilitiesExpanded}
+            aria-hidden={!isHeaderUtilitiesExpanded}
           >
-            <img
-              src={refreshIcon}
-              alt=""
-              class="header-icon refresh-icon"
+            <button
+              class:refresh-btn={true}
+              class:spinning={isRefreshing}
+              on:click={handleRefresh}
+              disabled={isRefreshing}
+              title="Refresh wallet data"
+              tabindex={isHeaderUtilitiesExpanded ? 0 : -1}
+            >
+              <img
+                src={refreshIcon}
+                alt=""
+                class="header-icon refresh-icon"
+                width="20"
+                height="20"
+              />
+            </button>
+            <button
+              class="balance-visibility-btn"
+              on:click={toggleBalance}
+              title={showBalance ? "Hide balance" : "Show balance"}
+              aria-label={showBalance ? "Hide balance" : "Show balance"}
+              tabindex={isHeaderUtilitiesExpanded ? 0 : -1}
+            >
+              <img
+                src={showBalance ? eyeOnIcon : eyeOffIcon}
+                alt=""
+                class="balance-visibility-icon"
+                width="20"
+                height="20"
+              />
+            </button>
+          </div>
+          <button
+            type="button"
+            class="header-utils-toggle-btn"
+            class:expanded={isHeaderUtilitiesExpanded}
+            on:click={toggleHeaderUtilities}
+            title={isHeaderUtilitiesExpanded
+              ? "Hide quick actions"
+              : "Show quick actions"}
+            aria-label={isHeaderUtilitiesExpanded
+              ? "Hide quick actions"
+              : "Show quick actions"}
+            aria-expanded={isHeaderUtilitiesExpanded}
+            aria-controls="header-secondary-utils"
+          >
+            <svg
+              class="header-icon header-utils-toggle-icon"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
               width="20"
               height="20"
-            />
-          </button>
-          <button
-            class="balance-visibility-btn"
-            on:click={toggleBalance}
-            title={showBalance ? "Hide balance" : "Show balance"}
-            aria-label={showBalance ? "Hide balance" : "Show balance"}
-          >
-            <img
-              src={showBalance ? eyeOnIcon : eyeOffIcon}
-              alt=""
-              class="balance-visibility-icon"
-              width="20"
-              height="20"
-            />
+              aria-hidden="true"
+            >
+              <path
+                d="M12.5 4.5L7 10l5.5 5.5"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
           </button>
           <button
             type="button"
@@ -2908,6 +3273,52 @@
                     >
                   </button>
                 </div>
+                {#if isVerifying}
+                  <div class="send-branta-status checking" role="status" aria-live="polite">
+                    <span class="send-branta-spinner" aria-hidden="true"></span>
+                    <span>Verifying with Branta...</span>
+                  </div>
+                {:else if brantaError}
+                  <div class="send-branta-status error" role="alert">
+                    <span class="send-branta-icon" aria-hidden="true">!</span>
+                    <span>{brantaError}</span>
+                  </div>
+                {:else if brantaResult}
+                  <div
+                    class="send-branta-status"
+                    class:flagged={!!brantaResult.isFlagged}
+                    class:verified={!brantaResult.isFlagged}
+                  >
+                    {#if brantaResult.logoUrl && !brantaLogoLoadFailed}
+                      <img
+                        src={brantaResult.logoUrl}
+                        alt={brantaResult.merchantName}
+                        class="send-branta-logo"
+                        on:error={() => (brantaLogoLoadFailed = true)}
+                      />
+                    {:else}
+                      <span class="send-branta-icon" aria-hidden="true"
+                        >{brantaResult.isFlagged ? "!" : "✓"}</span
+                      >
+                    {/if}
+                    <span>
+                      {#if brantaResult.isFlagged}
+                        Branta flagged address: {brantaResult.merchantName}
+                      {:else}
+                        Branta Verified: {brantaResult.merchantName}
+                      {/if}
+                    </span>
+                    {#if brantaResult.verifyUrl}
+                      <a
+                        class="send-branta-link"
+                        href={brantaResult.verifyUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        >Proof ↗</a
+                      >
+                    {/if}
+                  </div>
+                {/if}
                 <label for="send-amount">Amount (BTC)</label>
                 <div class="send-amount-row">
                   <input
@@ -3934,6 +4345,7 @@
   .app-header .refresh-btn,
   .app-header .balance-visibility-btn,
   .app-header .expand-btn,
+  .app-header .header-utils-toggle-btn,
   .app-header .lock-btn,
   .app-header .wallet-settings-btn {
     display: flex;
@@ -3963,6 +4375,7 @@
   .app-header .refresh-btn:hover:not(:disabled),
   .app-header .balance-visibility-btn:hover,
   .app-header .expand-btn:hover,
+  .app-header .header-utils-toggle-btn:hover,
   .app-header .lock-btn:hover,
   .app-header .wallet-settings-btn:hover {
     background: var(--glass-pane-bg-solid, var(--color-border));
@@ -3972,6 +4385,7 @@
   .app-header .refresh-btn:active,
   .app-header .balance-visibility-btn:active,
   .app-header .expand-btn:active,
+  .app-header .header-utils-toggle-btn:active,
   .app-header .lock-btn:active,
   .app-header .wallet-settings-btn:active {
     transform: scale(0.98);
@@ -5133,6 +5547,92 @@
     border-color: var(--color-primary);
   }
 
+  .send-branta-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -4px 0 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.3;
+    border: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-cardBackground) 80%, transparent);
+    color: var(--color-textSecondary);
+  }
+
+  .send-branta-status.checking {
+    color: var(--color-text);
+  }
+
+  .send-branta-status.verified {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.32);
+    color: #15803d;
+  }
+
+  .send-branta-status.flagged,
+  .send-branta-status.error {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.32);
+    color: #b91c1c;
+  }
+
+  .send-branta-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  .send-branta-logo {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: #ffffff;
+  }
+
+  .send-branta-status.verified .send-branta-icon {
+    background: #16a34a;
+  }
+
+  .send-branta-status.flagged .send-branta-icon,
+  .send-branta-status.error .send-branta-icon {
+    background: #dc2626;
+  }
+
+  .send-branta-spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    animation: rotate 0.75s linear infinite;
+    flex-shrink: 0;
+  }
+
+  .send-branta-link {
+    margin-left: auto;
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .send-branta-link:hover {
+    text-decoration: underline;
+  }
+
   .receive-modal-badge {
     background: var(--color-disabled);
     color: var(--color-text);
@@ -5503,6 +6003,30 @@
     flex: 0 0 auto;
     flex-wrap: nowrap;
   }
+  .header-secondary-utils {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition:
+      max-width 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+      opacity 0.2s ease;
+    will-change: max-width, opacity;
+  }
+  .header-secondary-utils.expanded {
+    max-width: 88px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .header-utils-toggle-btn.expanded .header-utils-toggle-icon {
+    transform: rotate(180deg);
+  }
+  .header-utils-toggle-icon {
+    transition: transform 0.25s ease;
+  }
   .header-logo {
     display: block;
     width: 32px;
@@ -5590,10 +6114,11 @@
     .app-header-right {
       gap: 4px;
     }
-    /* Hide secondary utility buttons on very small screens */
-    .app-header .refresh-btn,
-    .app-header .balance-visibility-btn {
-      display: none;
+    .header-secondary-utils {
+      gap: 4px;
+    }
+    .header-secondary-utils.expanded {
+      max-width: 76px;
     }
   }
 

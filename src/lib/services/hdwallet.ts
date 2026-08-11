@@ -210,25 +210,14 @@ const ecc = {
 let eccInitialized = false;
 function ensureEccInitialized() {
   if (eccInitialized) return;
-  console.log('[ECC] Initializing ecc library...');
-  console.log('[ECC] Testing ecc methods:');
   try {
     // Test key methods before validation
     const testPriv = new Uint8Array(32).fill(1);
     testPriv[31] = 1; // Valid private key
-    const testPub = ecc.pointFromScalar(testPriv, true);
-    console.log('[ECC] pointFromScalar:', testPub?.length, 'bytes');
-    const testAdd = ecc.privateAdd(testPriv, testPriv);
-    console.log('[ECC] privateAdd:', testAdd?.length, 'bytes');
-    const testNeg = ecc.privateNegate(testPriv);
-    console.log('[ECC] privateNegate:', testNeg?.length, 'bytes');
     
     bitcoin.initEccLib(ecc);
-    console.log('[ECC] ✓ ecc library initialized successfully');
     eccInitialized = true;
   } catch (error) {
-    console.error('[ECC] ✗ Failed to initialize ecc library:', error);
-    console.error('[ECC] Error details:', error instanceof Error ? error.stack : error);
     throw new Error(`ecc library initialization failed: ${error}`);
   }
 }

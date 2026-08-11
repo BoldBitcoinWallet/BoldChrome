@@ -17,7 +17,7 @@
   onMount(async () => {
     // Initialize canvas context but don't start camera yet
     if (canvas) {
-      canvasContext = canvas.getContext('2d');
+      canvasContext = canvas.getContext('2d', { willReadFrequently: true });
     }
     
     // Auto-start camera when component mounts
@@ -84,10 +84,17 @@
     scanning = false;
     if (animationFrameId) {
       cancelAnimationFrame(animationFrameId);
+      animationFrameId = 0;
+    }
+    if (video) {
+      video.pause();
+      video.srcObject = null;
     }
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
+      stream = null;
     }
+    cameraStarted = false;
   }
 
   function tick() {
