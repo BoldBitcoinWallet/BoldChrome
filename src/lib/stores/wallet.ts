@@ -933,13 +933,27 @@ function applyTransactionMetadata(
 
   if (tx.type !== 'send' || tx.brantaMerchant || !tx.to) return tx;
 
+  const normalizedTxTo = tx.to.trim().toLowerCase();
   const txTimeMs = tx.timestamp * 1000;
-  const matchedPending = pendingMetadata.find(item =>
-    item.recipientAddress === tx.to &&
-    item.amountSats === tx.amount &&
-    txTimeMs >= item.createdAt - 5 * 60 * 1000 &&
-    txTimeMs <= item.createdAt + 72 * 60 * 60 * 1000,
-  );
+
+  const candidates = pendingMetadata
+    .filter(item =>
+      item.recipientAddress.trim().toLowerCase() === normalizedTxTo &&
+      txTimeMs >= item.createdAt - 5 * 60 * 1000 &&
+      txTimeMs <= item.createdAt + 72 * 60 * 60 * 1000,
+    )
+    .sort((a, b) => {
+      const amountDeltaA = Math.abs(a.amountSats - tx.amount);
+      const amountDeltaB = Math.abs(b.amountSats - tx.amount);
+      if (amountDeltaA !== amountDeltaB) return amountDeltaA - amountDeltaB;
+      return Math.abs(txTimeMs - a.createdAt) - Math.abs(txTimeMs - b.createdAt);
+    });
+
+  const matchedPending = candidates.find(item => {
+    const amountDelta = Math.abs(item.amountSats - tx.amount);
+    const maxTolerance = Math.max(2500, Math.round(item.amountSats * 0.02));
+    return amountDelta <= maxTolerance;
+  }) || candidates[0];
 
   if (!matchedPending?.brantaMerchant) return tx;
   return { ...tx, brantaMerchant: matchedPending.brantaMerchant };
