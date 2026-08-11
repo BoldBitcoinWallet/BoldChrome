@@ -390,7 +390,7 @@ class PsbtService {
         throw new Error(`Missing prevout ${utxo.txid}:${utxo.vout} while building PSBT`);
       }
       prevOuts.push({
-        value: prevOutput.value,
+        value: Number(prevOutput.value),
         scriptHex: Buffer.from(prevOutput.script).toString('hex'),
       });
       
