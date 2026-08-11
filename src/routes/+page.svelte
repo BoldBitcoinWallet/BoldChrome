@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { walletStore, initializeWalletStore, refreshWalletData, updateWalletFromPairing } from '$lib/stores/wallet';
+  import {
+    walletStore,
+    initializeWalletStore,
+    refreshWalletData,
+    updateWalletFromPairing,
+    type Transaction,
+  } from '$lib/stores/wallet';
   import QRScanner from '$lib/components/QRScanner.svelte';
   import SendTransaction from '$lib/components/SendTransaction.svelte';
   import ActiveTxVisualizer from '$lib/components/ActiveTxVisualizer.svelte';
@@ -172,6 +178,57 @@
   function formatUSD(usd: string): string {
     return parseFloat(usd).toFixed(2);
   }
+
+  type HistoryStatus = 'awaiting' | 'confirmed' | 'failed';
+  type DateBucket = 'Today' | 'Yesterday' | 'This Week' | 'Older';
+
+  let activeHistoryTab: HistoryStatus = 'awaiting';
+
+  function mapTxStatusToHistory(status: string): HistoryStatus {
+    if (status === 'confirmed') return 'confirmed';
+    if (status === 'failed') return 'failed';
+    return 'awaiting';
+  }
+
+  function txDateBucket(timestampSeconds: number): DateBucket {
+    const txDate = new Date(timestampSeconds * 1000);
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startTx = new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate());
+    const diffDays = Math.floor((startToday.getTime() - startTx.getTime()) / 86400000);
+    if (diffDays <= 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays <= 7) return 'This Week';
+    return 'Older';
+  }
+
+  function groupHistoryByStatusAndDate(
+    txs: Transaction[],
+  ): Record<HistoryStatus, Array<{ bucket: DateBucket; items: Transaction[] }>> {
+    const byStatus: Record<HistoryStatus, Record<DateBucket, Transaction[]>> = {
+      awaiting: { Today: [], Yesterday: [], 'This Week': [], Older: [] },
+      confirmed: { Today: [], Yesterday: [], 'This Week': [], Older: [] },
+      failed: { Today: [], Yesterday: [], 'This Week': [], Older: [] },
+    };
+
+    const sorted = [...txs].sort((a, b) => b.timestamp - a.timestamp);
+    sorted.forEach(tx => {
+      const status = mapTxStatusToHistory(tx.status);
+      const bucket = txDateBucket(tx.timestamp);
+      byStatus[status][bucket].push(tx);
+    });
+
+    const order: DateBucket[] = ['Today', 'Yesterday', 'This Week', 'Older'];
+    return {
+      awaiting: order.map(bucket => ({ bucket, items: byStatus.awaiting[bucket] })),
+      confirmed: order.map(bucket => ({ bucket, items: byStatus.confirmed[bucket] })),
+      failed: order.map(bucket => ({ bucket, items: byStatus.failed[bucket] })),
+    };
+  }
+
+  $: groupedHistory = groupHistoryByStatusAndDate($walletStore.transactions);
+  $: activeHistoryGroups = groupedHistory[activeHistoryTab];
+  $: activeHistoryCount = activeHistoryGroups.reduce((acc, g) => acc + g.items.length, 0);
 </script>
 
 <div class="wallet-container">
@@ -276,38 +333,71 @@
         </div>
 
         <div class="transactions-section">
-          <h3>Recent Transactions</h3>
+          <h3>Co-Sign History</h3>
 
-          {#if $walletStore.transactions.length === 0}
-            <p class="no-transactions">No transactions yet</p>
+          <div class="history-tabs" role="tablist" aria-label="Co-sign history status filters">
+            <button
+              class="history-tab"
+              class:active={activeHistoryTab === 'awaiting'}
+              on:click={() => (activeHistoryTab = 'awaiting')}
+              type="button"
+            >Awaiting</button>
+            <button
+              class="history-tab"
+              class:active={activeHistoryTab === 'confirmed'}
+              on:click={() => (activeHistoryTab = 'confirmed')}
+              type="button"
+            >Confirmed</button>
+            <button
+              class="history-tab"
+              class:active={activeHistoryTab === 'failed'}
+              on:click={() => (activeHistoryTab = 'failed')}
+              type="button"
+            >Failed</button>
+          </div>
+
+          {#if $walletStore.transactions.length === 0 || activeHistoryCount === 0}
+            <p class="no-transactions">No {activeHistoryTab} co-sign records yet</p>
           {:else}
-            <div class="transaction-list">
-              {#each $walletStore.transactions.slice(0, 5) as tx}
-                <div class="transaction-item">
-                  <div class="tx-info">
-                    {#if tx.brantaMerchant}
-                      <div class="tx-merchant-badge">
-                        <img
-                          src={tx.brantaMerchant.logoUrl || '/icons/icon48.png'}
-                          alt={tx.brantaMerchant.merchantName}
-                          class="tx-merchant-logo"
-                          on:error={(e) => {
-                            const img = e.currentTarget as HTMLImageElement;
-                            img.src = '/icons/icon48.png';
-                          }}
-                        />
-                        <span class="tx-merchant-checkmark" aria-hidden="true">✓</span>
-                        <span class="tx-merchant-name">{tx.brantaMerchant.merchantName}</span>
-                      </div>
-                    {:else}
-                      <span class="tx-type {tx.type}">{tx.type}</span>
-                    {/if}
-                    <span class="tx-amount">{(tx.amount / 100_000_000).toFixed(8)} BTC</span>
-                  </div>
-                  <div class="tx-date">
-                    {new Date(tx.timestamp * 1000).toLocaleDateString()}
-                  </div>
-                </div>
+            <div class="history-groups">
+              {#each activeHistoryGroups as group}
+                {#if group.items.length > 0}
+                  <details class="history-group" open>
+                    <summary>
+                      <span>{group.bucket}</span>
+                      <span class="history-group-count">{group.items.length}</span>
+                    </summary>
+                    <div class="transaction-list">
+                      {#each group.items.slice(0, 12) as tx}
+                        <div class="transaction-item">
+                          <div class="tx-info">
+                            {#if tx.brantaMerchant}
+                              <div class="tx-merchant-badge">
+                                <img
+                                  src={tx.brantaMerchant.logoUrl || '/icons/icon48.png'}
+                                  alt={tx.brantaMerchant.merchantName}
+                                  class="tx-merchant-logo"
+                                  on:error={(e) => {
+                                    const img = e.currentTarget as HTMLImageElement;
+                                    img.src = '/icons/icon48.png';
+                                  }}
+                                />
+                                <span class="tx-merchant-checkmark" aria-hidden="true">✓</span>
+                                <span class="tx-merchant-name">{tx.brantaMerchant.merchantName}</span>
+                              </div>
+                            {:else}
+                              <span class="tx-type {tx.type}">{tx.type}</span>
+                            {/if}
+                            <span class="tx-amount">{(tx.amount / 100_000_000).toFixed(8)} BTC</span>
+                          </div>
+                          <div class="tx-date">
+                            {new Date(tx.timestamp * 1000).toLocaleDateString()}
+                          </div>
+                        </div>
+                      {/each}
+                    </div>
+                  </details>
+                {/if}
               {/each}
             </div>
           {/if}
@@ -788,9 +878,74 @@
     color: #111827;
   }
 
+  .history-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .history-tab {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #f8fafc;
+    color: #334155;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .history-tab.active {
+    background: #111827;
+    border-color: #111827;
+    color: #ffffff;
+  }
+
+  .history-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .history-group {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .history-group summary {
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f172a;
+    background: #f8fafc;
+  }
+
+  .history-group summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .history-group-count {
+    min-width: 22px;
+    text-align: center;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 11px;
+    padding: 2px 7px;
+  }
+
   .transaction-list {
     max-height: 200px;
     overflow-y: auto;
+    padding: 8px;
   }
 
   .transaction-item {

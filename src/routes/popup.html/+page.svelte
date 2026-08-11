@@ -1163,6 +1163,48 @@
     return parsed;
   }
 
+  async function persistPendingBrantaMetadata(
+    recipientAddress: string,
+    amountSats: number,
+  ): Promise<void> {
+    if (!brantaResult || brantaResult.isFlagged) return;
+    try {
+      const key = "pendingBrantaMetadata";
+      const raw = await storage.get<string>(key);
+      const existing = raw
+        ? (JSON.parse(raw) as Array<{
+            recipientAddress: string;
+            amountSats: number;
+            createdAt: number;
+            brantaMerchant: {
+              merchantId?: string;
+              merchantName: string;
+              logoUrl?: string;
+              verifyUrl?: string;
+            };
+          }>)
+        : [];
+      const now = Date.now();
+      const fresh = existing.filter(
+        (item) => now - item.createdAt < 72 * 60 * 60 * 1000,
+      );
+      fresh.push({
+        recipientAddress,
+        amountSats,
+        createdAt: now,
+        brantaMerchant: {
+          merchantId: brantaResult.merchantId,
+          merchantName: brantaResult.merchantName,
+          logoUrl: brantaResult.logoUrl,
+          verifyUrl: brantaResult.verifyUrl,
+        },
+      });
+      await storage.set(key, JSON.stringify(fresh.slice(-50)));
+    } catch (error) {
+      console.warn("[popup] Failed to cache pending Branta metadata", error);
+    }
+  }
+
   async function runBrantaLookup(
     lookupPayload: string,
     sourceValue: string,
@@ -1937,6 +1979,7 @@
           getCurrentReceiveAddress()?.path || "",
           $walletStore.network,
         );
+        await persistPendingBrantaMetadata(sendAddress, amountSats);
         qrCodeDataUrl = dataUrl;
         qrModalTitle = "Scan with Mobile Wallet to Send";
         showSend = false;
@@ -3425,7 +3468,7 @@
                       class:selected={sendMode === "dkls"}
                       on:click={() => (sendMode = "dkls")}
                     >
-                      Regular DKLS MPC
+                      Regular MPC
                     </button>
                     <button
                       type="button"
@@ -5124,7 +5167,7 @@
   }
   .tx-merchant-icon-wrap {
     position: relative;
-    width: 24px;
+    width: 32px;
     height: 24px;
     flex-shrink: 0;
   }
@@ -5137,8 +5180,8 @@
   }
   .tx-merchant-check {
     position: absolute;
-    bottom: -2px;
-    right: -2px;
+    bottom: -1px;
+    right: 0;
     width: 14px;
     height: 14px;
     border-radius: 50%;
@@ -5157,6 +5200,10 @@
     font-weight: 700;
     color: var(--color-text);
     opacity: 0.9;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .tx-amount {
     font-family: var(--font-mono);

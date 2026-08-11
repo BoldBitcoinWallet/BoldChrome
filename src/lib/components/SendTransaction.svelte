@@ -402,7 +402,7 @@
             class:active={sendMode === 'dkls'}
             on:click={() => (sendMode = 'dkls')}
           >
-            Regular DKLS MPC Transaction
+            Regular MPC
           </button>
           <button
             type="button"

@@ -244,7 +244,7 @@
           on:click={() => (sendMode = 'dkls')}
           style={`flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid ${sendMode === 'dkls' ? 'var(--color-primary)' : 'var(--color-border)'};background:${sendMode === 'dkls' ? 'rgba(247,147,26,0.1)' : 'transparent'};color:var(--color-text);`}
         >
-          Regular DKLS MPC Transaction
+          Regular MPC Transaction
         </button>
         <button
           type="button"
