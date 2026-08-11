@@ -51,6 +51,10 @@ export default defineConfig({
 				inlineDynamicImports: false
 			}
 		},
+		// Disable modulepreload hints to avoid cross-world extension resource warnings
+		modulePreload: {
+			polyfill: false
+		},
 		// Source maps for debugging
 		sourcemap: process.env.NODE_ENV === 'development',
 		minify: process.env.NODE_ENV === 'production'

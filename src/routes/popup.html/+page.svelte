@@ -3934,6 +3934,7 @@
   .app-header .refresh-btn,
   .app-header .balance-visibility-btn,
   .app-header .expand-btn,
+  .app-header .lock-btn,
   .app-header .wallet-settings-btn {
     display: flex;
     align-items: center;
@@ -3956,11 +3957,13 @@
       0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
     backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
     -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
+    flex-shrink: 0;
   }
   .app-header .theme-toggle:hover:not(:disabled),
   .app-header .refresh-btn:hover:not(:disabled),
   .app-header .balance-visibility-btn:hover,
   .app-header .expand-btn:hover,
+  .app-header .lock-btn:hover,
   .app-header .wallet-settings-btn:hover {
     background: var(--glass-pane-bg-solid, var(--color-border));
     transform: scale(1.05);
@@ -3969,6 +3972,7 @@
   .app-header .refresh-btn:active,
   .app-header .balance-visibility-btn:active,
   .app-header .expand-btn:active,
+  .app-header .lock-btn:active,
   .app-header .wallet-settings-btn:active {
     transform: scale(0.98);
   }
@@ -5474,12 +5478,12 @@
     background: var(--color-background);
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
-    padding: 12px;
+    padding: 12px 8px;
     display: flex !important;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    overflow: visible; /* prevent any clipping of text ascenders/descenders */
+    gap: 6px;
+    overflow: visible;
     line-height: normal;
   }
   .app-header-left {
@@ -5489,15 +5493,15 @@
     width: auto !important;
     min-width: 0;
     flex: 1 1 auto;
-    padding-right: 8px;
   }
   .app-header-right {
     display: inline-flex !important;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     width: auto !important;
     margin-left: auto;
     flex: 0 0 auto;
+    flex-wrap: nowrap;
   }
   .header-logo {
     display: block;
@@ -5528,6 +5532,7 @@
       background 0.2s,
       border-color 0.2s,
       box-shadow 0.2s;
+    flex: 0 1 auto;
     min-width: 0;
     max-width: 100%;
   }
@@ -5536,9 +5541,8 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
-    max-width: 100%;
+    flex: 0 1 auto;
     flex-wrap: nowrap;
-    overflow: hidden;
     box-sizing: border-box;
   }
   .header-testnet-badge {
@@ -5555,6 +5559,7 @@
     text-transform: uppercase;
     line-height: 1.2;
     flex: 0 0 auto;
+    white-space: nowrap;
   }
   .header-price-btn:hover {
     background: var(--glass-pane-bg-solid, var(--color-border));
@@ -5571,6 +5576,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.2;
+  }
+
+  /* Responsive header adjustments for constrained viewports */
+  @media (max-width: 360px) {
+    .app-header {
+      padding: 10px 6px;
+      gap: 4px;
+    }
+    .app-header-left {
+      gap: 6px;
+    }
+    .app-header-right {
+      gap: 4px;
+    }
+    /* Hide secondary utility buttons on very small screens */
+    .app-header .refresh-btn,
+    .app-header .balance-visibility-btn {
+      display: none;
+    }
   }
 
   /* Content container below header — scrolls; reserve space for fixed header */

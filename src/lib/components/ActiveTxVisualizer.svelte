@@ -352,35 +352,35 @@
     <div class="status-stack">
       {#key statusTransitionKey}
         {#if errorMessage}
-          <div class="status-phase" in:fade={{ duration: 200 }} out:fade={{ duration: 180 }}>
+          <div class="status-phase" in:fade|local={{ duration: 240 }} out:fade|local={{ duration: 180 }}>
             <div class="status-text error">{errorMessage}</div>
             <button class="retry-btn" on:click={() => { if (txid) { pollAttempts = 0; errorMessage = null; startPolling(txid); } }}>
               Retry
             </button>
           </div>
         {:else if phase === 'idle'}
-          <div class="status-phase" in:fade={{ duration: 200 }} out:fade={{ duration: 180 }}>
+          <div class="status-phase" in:fade|local={{ duration: 240 }} out:fade|local={{ duration: 180 }}>
             <div class="status-text">Awaiting transaction</div>
           </div>
         {:else if phase === 'signing'}
-          <div class="status-phase" in:fade={{ duration: 200 }} out:fade={{ duration: 180 }}>
+          <div class="status-phase" in:fade|local={{ duration: 240 }} out:fade|local={{ duration: 180 }}>
             <div class="status-text">Dual-signing in progress…</div>
           </div>
         {:else if phase === 'broadcasting'}
-          <div class="status-phase" in:fade={{ duration: 200 }} out:fade={{ duration: 180 }}>
+          <div class="status-phase" in:fade|local={{ duration: 240 }} out:fade|local={{ duration: 180 }}>
             <div class="status-text">Broadcasting to network</div>
           </div>
         {:else if phase === 'mempool'}
-          <div class="status-phase" in:fade={{ duration: 200 }} out:fade={{ duration: 180 }}>
+          <div class="status-phase" in:fade|local={{ duration: 240 }} out:fade|local={{ duration: 180 }}>
             <div class="status-text">
               In mempool
               {#if confirmations > 0}
-                <span class="confirmations" transition:slide={{ duration: 200 }}>• {confirmations} confirmation{confirmations > 1 ? 's' : ''}</span>
+                <span class="confirmations" transition:slide|local={{ duration: 200 }}>• {confirmations} confirmation{confirmations > 1 ? 's' : ''}</span>
               {/if}
             </div>
           </div>
         {:else if phase === 'confirmed'}
-          <div class="status-phase" in:fade={{ duration: 200 }} out:fade={{ duration: 180 }}>
+          <div class="status-phase" in:fade|local={{ duration: 240 }} out:fade|local={{ duration: 180 }}>
             <div class="status-text confirmed">
               {#if confirmedBlockHeight}
                 Confirmed in Block #{confirmedBlockHeight}
@@ -396,7 +396,7 @@
     <div class="txid-stage">
       {#if txid && !errorMessage}
         {#key txid}
-          <div class="txid-wrapper" in:fade={{ duration: 220 }} out:fade={{ duration: 160 }}>
+          <div class="txid-wrapper" in:fade|local={{ duration: 240 }} out:fade|local={{ duration: 160 }}>
             <button
               type="button"
               class="txid-pill"
@@ -636,7 +636,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 4px;
     width: 100%;
     height: 84px;
@@ -649,6 +649,7 @@
   .tx-visualizer.compact .status-panel {
     height: 78px;
     min-height: 78px;
+    justify-content: center;
   }
 
   .status-stack {
@@ -656,16 +657,16 @@
     width: 100%;
     height: 50px;
     min-height: 50px;
+    flex-shrink: 0;
   }
 
   .status-phase {
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     gap: 4px;
+    will-change: opacity;
   }
 
   .txid-stage {
@@ -673,14 +674,15 @@
     width: 100%;
     height: 28px;
     min-height: 28px;
+    flex-shrink: 0;
   }
 
   .txid-wrapper {
     position: absolute;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
+    will-change: opacity;
   }
 
   .status-text {
@@ -695,6 +697,7 @@
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    will-change: opacity;
   }
 
   .status-text.confirmed {
@@ -719,6 +722,7 @@
     transition: background 120ms ease, border-color 120ms ease;
     line-height: 1.4;
     white-space: nowrap;
+    will-change: opacity;
   }
 
   @media (max-width: 340px) {
@@ -782,16 +786,19 @@
       min-height: 70px;
       padding: 0 8px;
       gap: 3px;
+      justify-content: center;
     }
 
     .tx-visualizer.compact .status-stack {
       height: 42px;
       min-height: 42px;
+      flex-shrink: 0;
     }
 
     .tx-visualizer.compact .txid-stage {
       height: 24px;
       min-height: 24px;
+      flex-shrink: 0;
     }
 
     .tx-visualizer.compact .status-text {

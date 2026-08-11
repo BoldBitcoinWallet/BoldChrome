@@ -1,7 +1,7 @@
 /**
  * Critical popup styles (extension).
  * Loaded from app.html so header, stepper, and pairing UI are styled before component CSS.
- * Selector: html body[data-sveltekit-preload-data="hover"]
+ * Selector: html body
  */
 
 /* Base */
@@ -64,7 +64,7 @@ body {
   line-height: 1.5;
 }
 
-body[data-sveltekit-preload-data="hover"] {
+body {
   min-width: 320px;
   max-width: 480px;
   width: 100%;
@@ -78,7 +78,7 @@ body[data-sveltekit-preload-data="hover"] {
 }
 
 /* ----- Popup root & content (so layout takes effect from app.css) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root {
+html body .popup-root {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -92,7 +92,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root {
   background-color: var(--color-background);
   /* Clean solid background for side panel — gradient only on launch screen */
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root.launch-screen {
+html body .popup-root.launch-screen {
   background-image:
     /* Teal bloom – anchored top-left; brand secondary */
     radial-gradient(
@@ -114,7 +114,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root.launch-screen {
     );
 }
 /* Global toast – fixed at top center; compact width (not full tab); glassy + readable */
-html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global {
+html body .popup-root .toast-global {
   position: fixed;
   top: 52px;
   left: 50%;
@@ -141,17 +141,17 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global {
   -webkit-backdrop-filter: saturate(130%) blur(14px);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .toast-global.success {
   background: color-mix(in srgb, var(--color-primary) 78%, transparent);
   border: 1px solid color-mix(in srgb, #ffffff 28%, transparent);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .toast-global.error {
+html body .popup-root .toast-global.error {
   background: color-mix(in srgb, var(--color-bitcoinOrange) 82%, transparent);
   border: 1px solid color-mix(in srgb, #ffffff 24%, transparent);
 }
-html body[data-sveltekit-preload-data="hover"] .app-content {
+html body .app-content {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -164,12 +164,12 @@ html body[data-sveltekit-preload-data="hover"] .app-content {
   box-sizing: border-box;
 }
 /* Popup main: wider side gutters than generic .app-content */
-html body[data-sveltekit-preload-data="hover"] .popup-root .app-content {
+html body .popup-root .app-content {
   padding-left: var(--space-large);
   padding-right: var(--space-large);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root.launch-screen
   .app-content {
   margin-top: 0;
@@ -196,7 +196,7 @@ html
   }
 
   body,
-  body[data-sveltekit-preload-data="hover"] {
+  body {
     width: 100% !important;
     max-width: 100% !important;
     min-height: 0 !important;
@@ -206,7 +206,7 @@ html
     overflow-y: hidden !important;
   }
 
-  html body[data-sveltekit-preload-data="hover"] .popup-root {
+  html body .popup-root {
     min-height: 0 !important;
     height: 100% !important;
     max-height: 100% !important;
@@ -214,14 +214,14 @@ html
     overflow: hidden !important;
   }
 
-  html body[data-sveltekit-preload-data="hover"] .app-content {
+  html body .app-content {
     min-height: 0 !important;
     flex: 1 1 auto !important;
   }
 }
 
 /* ----- Camera permission overlay (first-load) ----- */
-html body[data-sveltekit-preload-data="hover"] .camera-permission-overlay {
+html body .camera-permission-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -235,7 +235,7 @@ html body[data-sveltekit-preload-data="hover"] .camera-permission-overlay {
   background: var(--color-background);
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-screen {
+html body .camera-permission-screen {
   margin-top: 0;
   padding-top: 0;
   display: flex;
@@ -246,7 +246,7 @@ html body[data-sveltekit-preload-data="hover"] .camera-permission-screen {
   min-height: 100%;
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-card {
+html body .camera-permission-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -263,47 +263,47 @@ html body[data-sveltekit-preload-data="hover"] .camera-permission-card {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-logo {
+html body .camera-permission-logo {
   width: 64px;
   height: 64px;
   object-fit: contain;
   margin-bottom: var(--space-large);
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-title {
+html body .camera-permission-title {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-text);
   margin: 0 0 var(--space-small) 0;
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-hint {
+html body .camera-permission-hint {
   font-size: var(--font-size-base);
   color: var(--color-textSecondary);
   line-height: 1.5;
   margin: 0 0 var(--space-large) 0;
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-actions {
+html body .camera-permission-actions {
   display: flex;
   flex-direction: column;
   gap: var(--space-medium);
   width: 100%;
   max-width: 260px;
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-grant {
+html body .camera-permission-grant {
   width: 100%;
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-skip {
+html body .camera-permission-skip {
   width: 100%;
   background: var(--color-cardBackground);
   border: 1px solid var(--color-border);
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .camera-permission-skip:hover {
+html body .camera-permission-skip:hover {
   background: var(--color-border);
   color: var(--color-text);
 }
 
 /* ----- Header: logo left, theme right ----- */
-html body[data-sveltekit-preload-data="hover"] .app-header {
+html body .app-header {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
@@ -325,7 +325,7 @@ html body[data-sveltekit-preload-data="hover"] .app-header {
   padding: 0 var(--space-medium);
 }
 
-html body[data-sveltekit-preload-data="hover"] .app-header-left {
+html body .app-header-left {
   position: absolute !important;
   left: var(--space-medium) !important;
   right: auto !important;
@@ -336,7 +336,7 @@ html body[data-sveltekit-preload-data="hover"] .app-header-left {
   width: auto !important;
 }
 
-html body[data-sveltekit-preload-data="hover"] .app-header-right {
+html body .app-header-right {
   position: absolute !important;
   left: auto !important;
   right: var(--space-medium) !important;
@@ -382,7 +382,7 @@ html body[data-sveltekit-preload-data="hover"] .app-header-right {
       );
   }
 
-  html body[data-sveltekit-preload-data="hover"] {
+  html body {
     width: 100% !important;
     max-width: none !important;
     min-height: 0 !important;
@@ -396,7 +396,7 @@ html body[data-sveltekit-preload-data="hover"] .app-header-right {
     align-items: center !important;
   }
 
-  html body[data-sveltekit-preload-data="hover"] .popup-root {
+  html body .popup-root {
     max-width: 900px !important;
     width: 100% !important;
     height: 100% !important;
@@ -409,12 +409,12 @@ html body[data-sveltekit-preload-data="hover"] .app-header-right {
     overflow: hidden !important;
   }
 
-  html body[data-sveltekit-preload-data="hover"] .popup-root .wallet {
+  html body .popup-root .wallet {
     max-width: 900px !important;
     overflow: hidden !important;
   }
 
-  html body[data-sveltekit-preload-data="hover"] .app-header {
+  html body .app-header {
     left: 50% !important;
     right: auto !important;
     transform: translateX(-50%) !important;
@@ -422,20 +422,20 @@ html body[data-sveltekit-preload-data="hover"] .app-header-right {
     width: 100% !important;
   }
 
-  html body[data-sveltekit-preload-data="hover"] .popup-root .app-header {
+  html body .popup-root .app-header {
     max-width: 900px !important;
     width: 100% !important;
   }
 }
 
 /* Generic header buttons: same as inner paired header .icon-btn (palette) */
-html body[data-sveltekit-preload-data="hover"] .app-header .theme-toggle,
-html body[data-sveltekit-preload-data="hover"] .app-header .refresh-btn,
+html body .app-header .theme-toggle,
+html body .app-header .refresh-btn,
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .app-header
   .balance-visibility-btn,
-html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn {
+html body .app-header .wallet-settings-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -458,43 +458,43 @@ html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn 
   backdrop-filter: blur(12px) saturate(var(--glass-sat));
   -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat));
 }
-html body[data-sveltekit-preload-data="hover"] .app-header .theme-toggle:hover:not(:disabled),
+html body .app-header .theme-toggle:hover:not(:disabled),
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .app-header
   .refresh-btn:hover:not(:disabled),
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .app-header
   .balance-visibility-btn:hover,
-html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn:hover {
+html body .app-header .wallet-settings-btn:hover {
   background: var(--glass-pane-bg-solid);
   transform: scale(1.05);
 }
-html body[data-sveltekit-preload-data="hover"] .app-header .theme-toggle:active,
-html body[data-sveltekit-preload-data="hover"] .app-header .refresh-btn:active,
+html body .app-header .theme-toggle:active,
+html body .app-header .refresh-btn:active,
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .app-header
   .balance-visibility-btn:active,
-html body[data-sveltekit-preload-data="hover"] .app-header .wallet-settings-btn:active {
+html body .app-header .wallet-settings-btn:active {
   transform: scale(0.98);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .app-header
   .refresh-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .app-header
   .refresh-btn.spinning {
   animation: rotate 0.6s linear infinite;
 }
 /* Eye privacy icon: light mode = dark icon, dark mode = invert to light */
-html body[data-sveltekit-preload-data="hover"] .header-icon {
+html body .header-icon {
   display: block;
   width: 20px;
   height: 20px;
@@ -505,7 +505,7 @@ html body[data-sveltekit-preload-data="hover"] .header-icon {
   filter: brightness(0) invert(1);
   opacity: 0.95;
 }
-html body[data-sveltekit-preload-data="hover"] .balance-visibility-icon {
+html body .balance-visibility-icon {
   display: block;
   width: 20px;
   height: 20px;
@@ -529,7 +529,7 @@ html body[data-sveltekit-preload-data="hover"] .balance-visibility-icon {
 }
 
 /* ----- Stepper on top of binding flow (sticky at top, above cards) ----- */
-html body[data-sveltekit-preload-data="hover"] .bind-flow {
+html body .bind-flow {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -539,7 +539,7 @@ html body[data-sveltekit-preload-data="hover"] .bind-flow {
   max-width: 360px;
   flex-shrink: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .stepper-top {
+html body .stepper-top {
   position: sticky;
   top: 0;
   z-index: 5;
@@ -557,22 +557,22 @@ html body[data-sveltekit-preload-data="hover"] .stepper-top {
     0 6px 24px color-mix(in srgb, var(--color-shadowColor) 4%, transparent);
 }
 /* Pairing body: centered on launch, start-aligned when steps active */
-html body[data-sveltekit-preload-data="hover"] .pairing-body {
+html body .pairing-body {
   justify-content: flex-start;
   align-items: center;
   width: 100%;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-body:not(.steps-active) {
   justify-content: center;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-body.steps-active {
+html body .pairing-body.steps-active {
   padding-top: 0;
 }
 
 /* ----- Get Started launch screen: title, subtitle, Bind wallet button (top) + coin animation (bottom) ----- */
-html body[data-sveltekit-preload-data="hover"] .pairing-start {
+html body .pairing-start {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -583,7 +583,7 @@ html body[data-sveltekit-preload-data="hover"] .pairing-start {
   width: 100%;
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-start-content {
+html body .pairing-start-content {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -592,31 +592,31 @@ html body[data-sveltekit-preload-data="hover"] .pairing-start-content {
   width: 100%;
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-start .pairing-logo {
+html body .pairing-start .pairing-logo {
   cursor: default;
   margin-bottom: var(--space-small);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-start
   .pairing-logo:hover {
   transform: none;
   box-shadow: none;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-start .app-logo {
+html body .pairing-start .app-logo {
   width: 80px;
   height: 80px;
   margin: 0 auto;
   animation: none;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-start
   .pairing-logo
   .app-logo {
   animation: none;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-get-started {
+html body .pairing-get-started {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-text);
@@ -624,7 +624,7 @@ html body[data-sveltekit-preload-data="hover"] .pairing-get-started {
   line-height: 1.25;
   text-align: center;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-cta {
+html body .pairing-cta {
   color: var(--color-textSecondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -633,7 +633,7 @@ html body[data-sveltekit-preload-data="hover"] .pairing-cta {
   text-align: center;
   max-width: 280px;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-bind-btn {
+html body .pairing-bind-btn {
   width: 100%;
   max-width: 240px;
   min-height: 44px;
@@ -649,7 +649,7 @@ html body[data-sveltekit-preload-data="hover"] .pairing-bind-btn {
 }
 
 /* ----- Coin animation container (lower half of Get Started screen) ----- */
-html body[data-sveltekit-preload-data="hover"] .animation-container {
+html body .animation-container {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -661,14 +661,14 @@ html body[data-sveltekit-preload-data="hover"] .animation-container {
   min-height: 120px;
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .coin-track {
+html body .coin-track {
   display: flex;
   align-items: flex-end;
   justify-content: center;
   width: 100%;
   perspective: 500px;
 }
-html body[data-sveltekit-preload-data="hover"] .btc-coin {
+html body .btc-coin {
   width: 56px;
   height: 56px;
   cursor: pointer;
@@ -677,12 +677,12 @@ html body[data-sveltekit-preload-data="hover"] .btc-coin {
   transform-style: preserve-3d;
   transform-origin: center center;
 }
-html body[data-sveltekit-preload-data="hover"] .coin-svg {
+html body .coin-svg {
   display: block;
   width: 100%;
   height: 100%;
 }
-html body[data-sveltekit-preload-data="hover"] .btc-coin.coin-shooting {
+html body .btc-coin.coin-shooting {
   animation: boldCoinShoot 1.3s cubic-bezier(0.25, 0.85, 0.35, 1.0) forwards;
 }
 @keyframes boldCoinShoot {
@@ -697,7 +697,7 @@ html body[data-sveltekit-preload-data="hover"] .btc-coin.coin-shooting {
 }
 
 /* ----- Stepper: fixed width so 1 and 2 aligned on every step; green = done only ----- */
-html body[data-sveltekit-preload-data="hover"] .stepper.stepper-dots {
+html body .stepper.stepper-dots {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -708,7 +708,7 @@ html body[data-sveltekit-preload-data="hover"] .stepper.stepper-dots {
   flex-shrink: 0;
 }
 
-html body[data-sveltekit-preload-data="hover"] .stepper-dot {
+html body .stepper-dot {
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -723,20 +723,20 @@ html body[data-sveltekit-preload-data="hover"] .stepper-dot {
   flex-shrink: 0;
 }
 
-html body[data-sveltekit-preload-data="hover"] .stepper-dot.active {
+html body .stepper-dot.active {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: var(--color-textOnPrimary);
 }
 
 /* Done = primary when step is completed (overrides .active if both set) */
-html body[data-sveltekit-preload-data="hover"] .stepper-dot.done {
+html body .stepper-dot.done {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: var(--color-textOnPrimary);
 }
 
-html body[data-sveltekit-preload-data="hover"] .stepper-line {
+html body .stepper-line {
   flex: 0 0 24px;
   width: 24px;
   height: 2px;
@@ -744,11 +744,11 @@ html body[data-sveltekit-preload-data="hover"] .stepper-line {
   margin: 0 var(--space-small);
 }
 
-html body[data-sveltekit-preload-data="hover"] .stepper-line.done {
+html body .stepper-line.done {
   background: var(--color-primary);
 }
 
-html body[data-sveltekit-preload-data="hover"] .step-title {
+html body .step-title {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
@@ -757,7 +757,7 @@ html body[data-sveltekit-preload-data="hover"] .step-title {
   line-height: 1.3;
 }
 
-html body[data-sveltekit-preload-data="hover"] .step-container {
+html body .step-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -769,7 +769,7 @@ html body[data-sveltekit-preload-data="hover"] .step-container {
 }
 
 /* ----- Pairing container: centered on launch, start-aligned when steps active ----- */
-html body[data-sveltekit-preload-data="hover"] .pairing-container {
+html body .pairing-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -786,15 +786,15 @@ html body[data-sveltekit-preload-data="hover"] .pairing-container {
   gap: var(--space-large);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-container:not(.steps-active) {
   justify-content: center;
 }
-html body[data-sveltekit-preload-data="hover"] .pairing-container.steps-active {
+html body .pairing-container.steps-active {
   padding-top: 0;
 }
 
-html body[data-sveltekit-preload-data="hover"] .pairing-logo {
+html body .pairing-logo {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -809,7 +809,7 @@ html body[data-sveltekit-preload-data="hover"] .pairing-logo {
   box-shadow: none;
 }
 
-html body[data-sveltekit-preload-data="hover"] .pairing-container .app-logo {
+html body .pairing-container .app-logo {
   display: block;
   margin: 0 auto var(--space-large);
   width: 120px;
@@ -858,12 +858,12 @@ html body[data-sveltekit-preload-data="hover"] .pairing-container .app-logo {
 }
 
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-container
   .pairing-logo:hover
   .app-logo,
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-container
   .pairing-logo:focus-visible
   .app-logo {
@@ -872,7 +872,7 @@ html
 }
 
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-container
   .pairing-logo:not(:hover):not(:focus)
   .app-logo {
@@ -880,7 +880,7 @@ html
   will-change: transform;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .pairing-container
   .pairing-start
   .app-logo {
@@ -890,7 +890,7 @@ html
 }
 
 /* ----- QR display & flow (vertical stack, start-aligned) ----- */
-html body[data-sveltekit-preload-data="hover"] .qr-display {
+html body .qr-display {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -906,7 +906,7 @@ html body[data-sveltekit-preload-data="hover"] .qr-display {
   box-sizing: border-box;
 }
 
-html body[data-sveltekit-preload-data="hover"] .qr-code {
+html body .qr-code {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -915,7 +915,7 @@ html body[data-sveltekit-preload-data="hover"] .qr-code {
   max-width: 100%;
 }
 
-html body[data-sveltekit-preload-data="hover"] .qr-code img {
+html body .qr-code img {
   width: 160px;
   height: 160px;
   max-width: 100%;
@@ -924,7 +924,7 @@ html body[data-sveltekit-preload-data="hover"] .qr-code img {
   margin: 0 auto;
 }
 
-html body[data-sveltekit-preload-data="hover"] .pairing-status {
+html body .pairing-status {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   font-family: var(--font-bold);
@@ -933,7 +933,7 @@ html body[data-sveltekit-preload-data="hover"] .pairing-status {
   margin: 0;
 }
 
-html body[data-sveltekit-preload-data="hover"] .instruction {
+html body .instruction {
   font-size: var(--font-size-base);
   color: var(--color-textSecondary);
   text-align: center;
@@ -941,7 +941,7 @@ html body[data-sveltekit-preload-data="hover"] .instruction {
   margin: 0;
 }
 
-html body[data-sveltekit-preload-data="hover"] .button-row {
+html body .button-row {
   display: flex;
   gap: var(--space-medium);
   width: 100%;
@@ -950,7 +950,7 @@ html body[data-sveltekit-preload-data="hover"] .button-row {
   margin-top: var(--space-large);
 }
 
-html body[data-sveltekit-preload-data="hover"] .btn-primary {
+html body .btn-primary {
   background: var(--color-primary);
   color: var(--color-textOnPrimary);
   border: none;
@@ -963,7 +963,7 @@ html body[data-sveltekit-preload-data="hover"] .btn-primary {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
-html body[data-sveltekit-preload-data="hover"] .btn-secondary {
+html body .btn-secondary {
   background: var(--color-cardBackground);
   color: var(--color-text);
   border: 1px solid var(--color-border);
@@ -976,7 +976,7 @@ html body[data-sveltekit-preload-data="hover"] .btn-secondary {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-html body[data-sveltekit-preload-data="hover"] .btn-text {
+html body .btn-text {
   background: none;
   border: none;
   color: var(--color-textSecondary);
@@ -988,7 +988,7 @@ html body[data-sveltekit-preload-data="hover"] .btn-text {
 }
 
 /* ----- Camera / scanner screen (top-aligned, match qr-display card) ----- */
-html body[data-sveltekit-preload-data="hover"] .scanner-overlay {
+html body .scanner-overlay {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1000,7 +1000,7 @@ html body[data-sveltekit-preload-data="hover"] .scanner-overlay {
   box-sizing: border-box;
 }
 
-html body[data-sveltekit-preload-data="hover"] .scanner-card {
+html body .scanner-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1015,7 +1015,7 @@ html body[data-sveltekit-preload-data="hover"] .scanner-card {
   box-sizing: border-box;
 }
 
-html body[data-sveltekit-preload-data="hover"] .scanner-step-label {
+html body .scanner-step-label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-textSecondary);
@@ -1024,7 +1024,7 @@ html body[data-sveltekit-preload-data="hover"] .scanner-step-label {
 }
 
 /* ----- Paired state: wallet UI (compact, no overflow) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .wallet {
+html body .popup-root .wallet {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -1038,7 +1038,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .wallet {
   overflow: hidden;
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .wallet-content {
+html body .popup-root .wallet-content {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -1052,7 +1052,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .wallet-content {
 }
 
 /* ----- Balance card (compact) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card {
+html body .popup-root .balance-card {
   margin-top: 0;
   margin-bottom: 0;
   padding: var(--space-medium);
@@ -1067,7 +1067,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card-inner {
+html body .popup-root .balance-card-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1076,7 +1076,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .balance-card-inner {
   min-height: 44px;
   min-width: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .balance-loading {
+html body .popup-root .balance-loading {
   display: flex;
   align-items: center;
   gap: var(--space-small);
@@ -1085,14 +1085,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .balance-loading {
 }
 
 /* Action row: Send / Receive */
-html body[data-sveltekit-preload-data="hover"] .popup-root .actions-row {
+html body .popup-root .actions-row {
   display: flex;
   gap: var(--space-medium);
   margin-top: var(--space-medium);
   margin-bottom: 0;
   align-items: stretch;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .action-btn {
+html body .popup-root .action-btn {
   flex: 1;
   display: flex;
   align-items: center;
@@ -1111,70 +1111,70 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .action-btn {
     box-shadow 0.2s;
   color: var(--color-textOnPrimary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-btn {
+html body .popup-root .send-btn {
   background: var(--color-accent);
   color: var(--color-textOnPrimary);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-btn
   .action-btn-icon,
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .receive-btn
   .action-btn-icon {
   filter: brightness(0) invert(1);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .receive-btn {
+html body .popup-root .receive-btn {
   background: var(--color-secondary);
   color: var(--color-textOnPrimary);
 }
 
-html body[data-sveltekit-preload-data="hover"] .popup-root .balance {
+html body .popup-root .balance {
   padding: var(--space-large) var(--space-large);
   background: var(--color-cardBackground);
   border-bottom: 1px solid var(--color-border);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .balance-content {
+html body .popup-root .balance-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .amount {
+html body .popup-root .amount {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   letter-spacing: -0.5px;
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .amount.placeholder {
+html body .popup-root .amount.placeholder {
   color: var(--color-disabled);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .amount.error {
+html body .popup-root .amount.error {
   color: var(--color-error);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .unit {
+html body .popup-root .unit {
   color: var(--color-textSecondary);
   font-weight: var(--font-weight-medium);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .fiat {
+html body .popup-root .fiat {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .fiat.placeholder {
+html body .popup-root .fiat.placeholder {
   color: var(--color-disabled);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .fiat.error {
+html body .popup-root .fiat.error {
   color: var(--color-error);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-selector {
+html body .popup-root .address-selector {
   margin-top: var(--space-small);
   min-width: 0;
   width: 100%;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .address-selector-inner {
   background: var(--glass-pane-bg);
@@ -1189,7 +1189,7 @@ html
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-toggle {
+html body .popup-root .dropdown-toggle {
   background: transparent;
   border: none;
   color: var(--color-text);
@@ -1197,7 +1197,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-toggle {
   min-width: 0;
   overflow: hidden;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-display {
+html body .popup-root .address-display {
   color: var(--color-text);
   overflow: hidden;
   min-width: 0;
@@ -1206,20 +1206,20 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .address-display {
   text-overflow: ellipsis;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .dropdown-toggle:hover {
   opacity: 0.9;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-arrow {
+html body .popup-root .dropdown-arrow {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .sync-addresses {
+html body .popup-root .sync-addresses {
   background: var(--color-primary);
   color: var(--color-textOnPrimary);
   border-radius: var(--radius-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-dropdown {
+html body .popup-root .address-dropdown {
   background: var(--glass-pane-bg-solid);
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 35%, transparent),
@@ -1230,22 +1230,22 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .address-dropdown {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .dropdown-header {
+html body .popup-root .dropdown-header {
   background: var(--color-background);
   color: var(--color-text);
   border-bottom: 1px solid var(--color-secondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-item {
+html body .popup-root .address-item {
   background: var(--color-cardBackground);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text);
 }
 
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-item:hover {
+html body .popup-root .address-item:hover {
   background: var(--color-background);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .address-item.active {
   background: var(--color-background);
@@ -1286,45 +1286,45 @@ html
   filter: brightness(0) invert(1);
   opacity: 0.95;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-text {
+html body .popup-root .address-text {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-prefix {
+html body .popup-root .address-prefix {
   color: var(--color-textSecondary);
   font-family: var(--font-mono);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address-check {
+html body .popup-root .address-check {
   color: var(--color-primary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .actions {
+html body .popup-root .actions {
   background: var(--color-cardBackground);
   border-bottom: 1px solid var(--color-border);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .btn {
+html body .popup-root .btn {
   background: var(--color-background);
   color: var(--color-text);
   border-radius: var(--radius-medium);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .btn.primary {
+html body .popup-root .btn.primary {
   background: var(--color-primary);
   color: var(--color-textOnPrimary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .btn.send {
+html body .popup-root .btn.send {
   background: var(--color-accent);
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .btn.receive {
+html body .popup-root .btn.receive {
   background: var(--color-secondary);
   color: var(--color-textOnPrimary);
 }
 /* ----- Tx list (aligned with popup.html structure: .tx-item, .tx-item-btn, .tx-status-*, .tx-amount) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list h2 {
+html body .popup-root .tx-list h2 {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-empty {
+html body .popup-root .tx-empty {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-item-btn {
+html body .popup-root .tx-item-btn {
   border: 1px solid var(--glass-stroke);
   background: var(--glass-pane-bg);
   color: var(--color-text);
@@ -1334,30 +1334,30 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-item-btn {
     inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 38%, transparent),
     0 2px 12px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-item-btn:hover {
+html body .popup-root .tx-item-btn:hover {
   background: var(--glass-pane-bg-solid);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-status-text {
+html body .popup-root .tx-status-text {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-amount.in {
+html body .popup-root .tx-amount.in {
   color: var(--color-secondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-amount.out {
+html body .popup-root .tx-amount.out {
   color: var(--color-bitcoinOrange);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-unit {
+html body .popup-root .tx-unit {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-address-label {
+html body .popup-root .tx-address-label {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-fiat,
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-id-label,
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-time {
+html body .popup-root .tx-fiat,
+html body .popup-root .tx-id-label,
+html body .popup-root .tx-time {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-id-value {
+html body .popup-root .tx-id-value {
   color: var(--color-text);
 }
 /* Dark mode: tx list icons */
@@ -1366,7 +1366,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-id-value {
   opacity: 0.95;
 }
 /* ----- Tx list paging (Load more / No more) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer {
+html body .popup-root .tx-list-footer {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1375,15 +1375,15 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer {
   border-top: 1px solid var(--color-border);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .tx-list-footer-loading,
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-footer-end {
+html body .popup-root .tx-list-footer-end {
   margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-load-more {
+html body .popup-root .tx-list-load-more {
   padding: var(--space-small) var(--space-medium);
   border-radius: var(--radius-small);
   border: 1px solid var(--glass-stroke);
@@ -1401,14 +1401,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .tx-list-load-more {
   box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 40%, transparent);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .tx-list-load-more:hover {
   background: var(--glass-pane-bg-solid);
   border-color: var(--color-primary);
 }
 /* ----- PIN lock / Set PIN screens ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen {
+html body .popup-root .pin-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1420,7 +1420,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen {
   flex: 1;
 }
 /* Lock screen: keep unlock card vertically centered in free space; version at bottom */
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen.lock-screen {
+html body .popup-root .pin-screen.lock-screen {
   justify-content: space-between;
   align-items: center;
   align-self: stretch;
@@ -1428,7 +1428,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen.lock-scre
   height: 100%;
   flex: 1 1 auto;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .lock-screen-main {
+html body .popup-root .lock-screen-main {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -1437,7 +1437,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .lock-screen-main {
   width: 100%;
   min-height: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .lock-screen-version {
+html body .popup-root .lock-screen-version {
   margin: 0;
   margin-top: auto;
   padding-top: var(--space-medium);
@@ -1450,17 +1450,17 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .lock-screen-version 
   flex-shrink: 0;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .pin-screen.pin-loading {
   gap: var(--space-medium);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-loading-text {
+html body .popup-root .pin-loading-text {
   margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-card {
+html body .popup-root .pin-screen-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1479,12 +1479,12 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-card {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-logo {
+html body .popup-root .pin-screen-logo {
   display: block;
   margin-bottom: var(--space-medium);
   flex-shrink: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-title {
+html body .popup-root .pin-screen-title {
   margin: 0 0 var(--space-small);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
@@ -1492,7 +1492,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-title {
   text-align: center;
   line-height: 1.25;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-hint {
+html body .popup-root .pin-screen-hint {
   margin: 0 0 var(--space-large);
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
@@ -1501,14 +1501,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-screen-hint {
   max-width: 100%;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .pin-screen-hint.pin-hint-long {
   max-width: 36ch;
   margin-left: auto;
   margin-right: auto;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-form {
+html body .popup-root .pin-form {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1516,12 +1516,12 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-form {
   gap: var(--space-small);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .pin-form.pin-form-confirm {
   gap: var(--space-medium);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input {
+html body .popup-root .pin-input {
   width: 100%;
   min-height: 44px;
   padding: var(--space-medium) var(--space-large);
@@ -1539,31 +1539,31 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input {
     box-shadow 0.2s;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .pin-input::placeholder {
   color: var(--color-textSecondary);
   opacity: 0.8;
   letter-spacing: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-input:focus {
+html body .popup-root .pin-input:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .pin-input[aria-invalid="true"] {
   border-color: var(--color-error);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .pin-input[aria-invalid="true"]:focus {
   box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-error {
+html body .popup-root .pin-error {
   margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-error);
@@ -1571,7 +1571,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-error {
   min-height: 1.25em;
   line-height: 1.3;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .pin-submit {
+html body .popup-root .pin-submit {
   width: 100%;
   min-height: 44px;
   margin-top: var(--space-small);
@@ -1582,13 +1582,13 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .pin-submit {
 }
 /* ----- Mempool preference screen (after pairing) ----- */
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-preference-card {
   max-width: 320px;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-preference-form {
   width: 100%;
@@ -1597,35 +1597,35 @@ html
   gap: var(--space-small);
   margin-top: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-label {
+html body .popup-root .mempool-label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-input {
+html body .popup-root .mempool-input {
   letter-spacing: 0;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-preference-actions {
   display: flex;
   gap: var(--space-medium);
   margin-top: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-skip-btn,
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-save-btn {
+html body .popup-root .mempool-skip-btn,
+html body .popup-root .mempool-save-btn {
   flex: 1;
   min-height: 44px;
 }
 /* ----- Mempool modal (Change provider) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal {
+html body .popup-root .mempool-modal {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-medium);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-card {
+html body .popup-root .mempool-modal-card {
   width: 100%;
   max-width: 320px;
   padding: var(--space-large);
@@ -1634,7 +1634,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .mempool-modal-card {
   gap: var(--space-medium);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-modal-title {
   margin: 0 0 var(--space-small);
@@ -1643,7 +1643,7 @@ html
   color: var(--color-text);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-modal-input {
   width: 100%;
@@ -1658,14 +1658,14 @@ html
   transition: border-color 0.2s;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-modal-input:focus {
   outline: none;
   border-color: var(--color-primary);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-modal-actions {
   display: flex;
@@ -1675,12 +1675,12 @@ html
   align-items: center;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-modal-actions
   .btn-secondary,
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-modal-actions
   .btn-primary {
@@ -1689,27 +1689,27 @@ html
   width: 30%;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .mempool-modal-reset-btn {
   min-height: 44px;
   padding: var(--space-medium) var(--space-large);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .header-title-text {
+html body .popup-root .header-title-text {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .lock-btn {
+html body .popup-root .lock-btn {
   background: var(--color-cardBackground);
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .lock-btn:hover {
+html body .popup-root .lock-btn:hover {
   background: var(--color-border);
 }
 [data-theme="darkPolished"] .popup-root .lock-icon {
   filter: brightness(0) invert(1);
 }
 /* ----- Footer: provider (left), Change (right) — pinned under .wallet-content ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer {
+html body .popup-root .footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1731,7 +1731,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer {
   margin-top: auto;
   width: 100%;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-left {
+html body .popup-root .footer-left {
   display: flex;
   align-items: center;
   gap: var(--space-small);
@@ -1739,14 +1739,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer-left {
   min-width: 0;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .footer-mempool-label {
   color: var(--color-textSecondary);
   flex-shrink: 0;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .footer-mempool-value {
   color: var(--color-text);
@@ -1756,13 +1756,13 @@ html
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-right {
+html body .popup-root .footer-right {
   display: flex;
   align-items: center;
   gap: var(--space-small);
   flex-shrink: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn {
+html body .popup-root .footer-btn {
   padding: var(--space-small) var(--space-medium);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
@@ -1779,11 +1779,11 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn {
   -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat));
   box-shadow: inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight) 35%, transparent);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-btn:hover {
+html body .popup-root .footer-btn:hover {
   background: var(--glass-pane-bg-solid);
   border-color: var(--color-primary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-link {
+html body .popup-root .footer-link {
   width: 100%;
   text-align: center;
   color: var(--color-textSecondary);
@@ -1791,12 +1791,12 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .footer-link {
   order: 3;
   font-size: var(--font-size-xs);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .footer-link:hover {
+html body .popup-root .footer-link:hover {
   color: var(--color-primary);
 }
 
 /* ----- Modals (backdrop + card base) ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .modal {
+html body .popup-root .modal {
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);
 }
@@ -1815,7 +1815,7 @@ html[data-theme='darkPolished']
   background: var(--glass-modal-scrim-dark);
 }
 
-html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card {
+html body .popup-root .modal-card {
   background: var(--glass-pane-bg-solid);
   border: 1px solid var(--glass-stroke);
   border-radius: var(--radius-large);
@@ -1827,7 +1827,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card {
 }
 /* Shared modal header (send + receive) */
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .receive-modal-header {
   display: flex;
@@ -1837,7 +1837,7 @@ html
   margin-bottom: var(--space-large);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .receive-modal-title {
   margin: 0;
@@ -1846,7 +1846,7 @@ html
   color: var(--color-text);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .receive-modal-close {
   width: 30px;
@@ -1863,52 +1863,52 @@ html
   transition: opacity 0.2s;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .receive-modal-close:hover {
   opacity: 1;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card h3 {
+html body .popup-root .modal-card h3 {
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card label {
+html body .popup-root .modal-card label {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .modal-card input {
+html body .popup-root .modal-card input {
   background: var(--color-inputBackground);
   border: 1px solid var(--color-border);
   color: var(--color-text);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .modal-card
   input:focus {
   border-color: var(--color-primary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .msg {
+html body .popup-root .msg {
   color: var(--color-success);
   border-color: var(--color-success);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .address {
+html body .popup-root .address {
   background: var(--color-inputBackground);
   border: 1px solid var(--color-border);
   color: var(--color-text);
   font-family: var(--font-mono);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .empty {
+html body .popup-root .empty {
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .qr-container {
+html body .popup-root .qr-container {
   background: var(--color-cardBackground);
   border: 1px solid var(--color-border);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .qr-instructions {
+html body .popup-root .qr-instructions {
   color: var(--color-textSecondary);
 }
 
 /* ----- Send modal (balance, fiat, address + scan) – design tokens ----- */
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-modal-card {
+html body .popup-root .send-modal-card {
   width: 90%;
   max-width: 340px;
   min-width: 0;
@@ -1920,7 +1920,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .send-modal-card {
   flex-direction: column;
   align-items: stretch;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-row {
+html body .popup-root .send-balance-row {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -1931,43 +1931,43 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-row {
   border-radius: var(--radius-small);
   border: 1px solid var(--color-border);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-label {
+html body .popup-root .send-balance-label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-textSecondary);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-value {
+html body .popup-root .send-balance-value {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-balance-fiat {
+html body .popup-root .send-balance-fiat {
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
   margin-left: auto;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-fiat-equivalent {
   margin: -6px 0 var(--space-medium) 0;
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-amount-row {
+html body .popup-root .send-amount-row {
   display: flex;
   gap: var(--space-small);
   align-items: stretch;
   margin-bottom: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-amount-input {
+html body .popup-root .send-amount-input {
   flex: 1 1 0;
   min-width: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-max-btn {
+html body .popup-root .send-max-btn {
   flex-shrink: 0;
   padding: var(--space-small) var(--space-medium);
   font-size: var(--font-size-sm);
@@ -1983,43 +1983,43 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .send-max-btn {
   height: 38px;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-max-btn:hover:not(:disabled) {
   background: var(--color-border);
   border-color: var(--color-primary);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-max-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-strategy {
+html body .popup-root .send-fee-strategy {
   margin-bottom: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-label {
+html body .popup-root .send-fee-label {
   display: block;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-textSecondary);
   margin-bottom: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-buttons {
+html body .popup-root .send-fee-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .fee-strategy-name {
+html body .popup-root .fee-strategy-name {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .fee-strategy-rate {
+html body .popup-root .fee-strategy-rate {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-normal);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-btn {
+html body .popup-root .send-fee-btn {
   padding: var(--space-small) var(--space-medium);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -2035,14 +2035,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-btn {
     color 0.2s;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-fee-btn:hover:not(:disabled) {
   background: var(--color-border);
   color: var(--color-text);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-fee-btn.selected {
   background: var(--color-primary);
@@ -2050,22 +2050,22 @@ html
   color: var(--color-textOnPrimary);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-fee-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-mode-track {
+html body .popup-root .send-mode-track {
   margin-bottom: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-mode-options {
+html body .popup-root .send-mode-options {
   display: flex;
   background: #f5f5f5;
   border-radius: 999px;
   padding: 4px;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-mode-btn {
+html body .popup-root .send-mode-btn {
   flex: 1;
   padding: var(--space-small) var(--space-medium);
   font-size: var(--font-size-sm);
@@ -2081,14 +2081,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .send-mode-btn {
     box-shadow 0.3s ease;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-mode-btn:active {
   transform: scale(0.98);
   transition: transform 0.1s ease;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-mode-btn.selected {
   background: #000;
@@ -2096,68 +2096,68 @@ html
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-mode-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-fee-row {
+html body .popup-root .send-fee-row {
   font-size: var(--font-size-sm);
   color: var(--color-textSecondary);
   margin-bottom: var(--space-small);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary {
+html body .popup-root .send-summary {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: var(--space-small);
   font-size: var(--font-size-sm);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-line {
+html body .popup-root .send-summary-line {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-label {
+html body .popup-root .send-summary-label {
   color: var(--color-textSecondary);
   flex-shrink: 0;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-value {
+html body .popup-root .send-summary-value {
   text-align: right;
   font-family: var(--font-mono);
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-fiat {
+html body .popup-root .send-summary-fiat {
   font-family: var(--font-body, sans-serif);
   color: var(--color-textSecondary);
   font-size: var(--font-size-xs);
   margin-left: 4px;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total {
+html body .popup-root .send-summary-total {
   border-top: 1px solid var(--color-border);
   padding-top: 6px;
   margin-top: 2px;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total .send-summary-label {
+html body .popup-root .send-summary-total .send-summary-label {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-summary-total .send-summary-value {
+html body .popup-root .send-summary-total .send-summary-value {
   font-weight: var(--font-weight-semibold);
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-summary-value.invalid {
   color: var(--color-error);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-total-warn {
+html body .popup-root .send-total-warn {
   margin: 0 0 var(--space-small);
   font-size: var(--font-size-sm);
   color: var(--color-error);
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-address-row {
+html body .popup-root .send-address-row {
   display: flex;
   gap: var(--space-small);
   align-items: stretch;
@@ -2165,14 +2165,14 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .send-address-row {
   min-width: 0;
   max-width: 100%;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-address-input {
+html body .popup-root .send-address-input {
   flex: 1 1 0;
   min-width: 0;
   max-width: 100%;
   margin-bottom: 0 !important;
   box-sizing: border-box;
 }
-html body[data-sveltekit-preload-data="hover"] .popup-root .send-scan-qr-btn {
+html body .popup-root .send-scan-qr-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -2194,7 +2194,7 @@ html body[data-sveltekit-preload-data="hover"] .popup-root .send-scan-qr-btn {
   box-sizing: border-box;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-scan-qr-btn
   .send-scan-qr-label {
@@ -2203,7 +2203,7 @@ html
   max-width: 4.5em;
 }
 html
-  body[data-sveltekit-preload-data="hover"]
+  body
   .popup-root
   .send-scan-qr-btn:hover {
   background: var(--color-disabled);
