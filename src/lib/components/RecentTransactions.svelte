@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { slide } from 'svelte/transition';
-  import ActiveTxVisualizer from './ActiveTxVisualizer.svelte';
+  import { slide } from "svelte/transition";
+  import ActiveTxVisualizer from "./ActiveTxVisualizer.svelte";
 
   // --- Props ---
   export let transactions: any[] = [];
@@ -8,9 +8,9 @@
   export let isLoading: boolean = false;
   export let isLoadingMore: boolean = false;
   export let hasMore: boolean = false;
-  export let network: 'mainnet' | 'testnet' = 'mainnet';
-  export let themeName: string = 'dark';
-  export let fiatSymbol: string = '$';
+  export let network: "mainnet" | "testnet" = "mainnet";
+  export let themeName: string = "dark";
+  export let fiatSymbol: string = "$";
 
   // Assets
   export let inIcon: string;
@@ -33,23 +33,24 @@
   }
 
   function handleKeydown(event: KeyboardEvent, txid: string) {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       toggleTxExpansion(txid);
     }
   }
 </script>
 
-<section
-  class="tx-list fade-in"
-  class:dark-mode={themeName === "darkPolished"}
->
+<section class="tx-list fade-in" class:dark-mode={themeName === "darkPolished"}>
   <h2>Recent Transactions</h2>
-  
+
   {#if transactions.length === 0 && !isLoading}
     <p class="tx-empty">No transactions yet</p>
   {:else}
-    <div class="tx-scroll-region" role="region" aria-label="Recent transactions list">
+    <div
+      class="tx-scroll-region"
+      role="region"
+      aria-label="Recent transactions list"
+    >
       <ul class="tx-list-ul">
         {#each visibleTransactions as tx (tx.id)}
           <li
@@ -71,16 +72,17 @@
                   <!-- Branta Verified Merchant Integration -->
                   {#if tx.merchant}
                     <div class="tx-merchant-icon-wrap">
-                        <img
-                            src={tx.merchant.logoUrl || outIcon}
-                            alt={tx.merchant.merchantName}
-                            class="tx-merchant-icon"
-                            on:error={(e) => {
-                            const img = e.currentTarget as HTMLImageElement;
-                            img.src = outIcon;
-                            }}
-                        />
-                        <span class="tx-merchant-check" aria-hidden="true">✓</span>
+                      <img
+                        src={tx.merchant.logoUrl || outIcon}
+                        alt={tx.merchant.merchantName}
+                        class="tx-merchant-icon"
+                        on:error={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          img.src = outIcon;
+                        }}
+                      />
+                      <span class="tx-merchant-check" aria-hidden="true">✓</span
+                      >
                     </div>
                   {:else}
                     <img
@@ -106,7 +108,7 @@
                   <span class="tx-unit">BTC</span>
                 </span>
               </div>
-              
+
               {#if tx.addressLabel}
                 <div class="tx-row tx-row-address">
                   <span class="tx-address-label">{tx.addressLabel}</span>
@@ -115,14 +117,16 @@
                   {/if}
                 </div>
               {/if}
-              
+
               <div class="tx-row tx-row-meta">
-                <span class="tx-id-label">Tx: <span class="tx-id-value">{tx.shortTxId}</span></span>
+                <span class="tx-id-label"
+                  >Tx: <span class="tx-id-value">{tx.shortTxId}</span></span
+                >
                 <span class="tx-time">{tx.timeLabel}</span>
-                
-                <button 
-                  class="tx-explorer-link" 
-                  type="button" 
+
+                <button
+                  class="tx-explorer-link"
+                  type="button"
                   on:click|stopPropagation={() => openTxInMempool(tx.id)}
                   title="View on Explorer"
                   aria-label="View on Explorer"
@@ -139,7 +143,9 @@
                   <ActiveTxVisualizer
                     txid={tx.id}
                     {network}
-                    initialPhase={tx.status === "confirmed" ? "confirmed" : "mempool"}
+                    initialPhase={tx.status === "confirmed"
+                      ? "confirmed"
+                      : "mempool"}
                     explorerBaseUrl={null}
                     compact={true}
                     onPhaseChange={() => {}}
@@ -178,7 +184,7 @@
             </button>
           </div>
         {/if}
-        
+
         {#if isLoadingMore}
           <p class="tx-list-footer-loading">Loading more…</p>
         {:else if hasMore && txPageIndex >= txTotalPages - 1}
@@ -196,40 +202,34 @@
 </section>
 
 <style>
-  /* Global / Scoped Scrollbar Styling to prevent layout shifts */
+  /* Completely hide scrollbar for Chrome, Safari, and Opera */
   :global(*::-webkit-scrollbar) {
-    width: 6px !important;
-    height: 6px !important;
-  }
-  
-  :global(*::-webkit-scrollbar-track) {
-    background: #090a0f !important;
-  }
-  
-  :global(*::-webkit-scrollbar-thumb) {
-    background: rgba(255, 255, 255, 0.25) !important;
-    border-radius: 4px !important;
-  }
-
-  :global(*::-webkit-scrollbar-thumb:hover) {
-    background: rgba(0, 255, 204, 0.5) !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 
   .tx-list {
     display: flex;
     flex-direction: column;
     width: 100%;
+    min-width: 100%;
     box-sizing: border-box;
+    flex-shrink: 0;
   }
 
   .tx-scroll-region {
-    max-height: 440px; 
+    max-height: 440px;
     overflow-y: auto;
     overflow-x: hidden;
     width: 100%;
     box-sizing: border-box;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.25) #090a0f;
+
+    /* Completely hide scrollbar for Firefox */
+    scrollbar-width: none !important;
+
+    /* Completely hide scrollbar for IE and Edge legacy */
+    -ms-overflow-style: none !important;
   }
 
   .tx-list-ul {
@@ -249,8 +249,10 @@
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
-    overflow: hidden; 
-    transition: background 0.2s ease, border-color 0.2s ease;
+    overflow: hidden;
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease;
     width: 100%;
     box-sizing: border-box;
   }
@@ -262,7 +264,7 @@
 
   .tx-item-clickable {
     width: 100%;
-    box-sizing: border-box; 
+    box-sizing: border-box;
     background: transparent;
     border: none;
     padding: 12px;
@@ -275,7 +277,7 @@
     font-family: inherit;
     outline: none;
   }
-  
+
   .tx-item-clickable:hover {
     background: rgba(255, 255, 255, 0.02);
   }
@@ -341,7 +343,9 @@
     box-shadow: 0 0 4px rgba(0, 255, 170, 0.6);
   }
 
-  .tx-amount, .tx-fiat, .tx-time {
+  .tx-amount,
+  .tx-fiat,
+  .tx-time {
     flex-shrink: 0;
     white-space: nowrap;
   }
@@ -357,7 +361,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
   }
 
   .tx-explorer-link:hover,
