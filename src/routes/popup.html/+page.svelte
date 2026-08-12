@@ -33,7 +33,6 @@
   } from "$lib/stores/wallet";
   import {
     networkStore,
-    initializeNetworkStore,
     setNetwork,
   } from "$lib/stores/network";
   import { qr } from "$lib/services/qr";
@@ -58,7 +57,7 @@
   import lockerIcon from "$lib/assets/locker-icon.png";
   import { keyshareFingerprint as computeKeyshareFingerprint } from "$lib/services/keyshareFingerprint";
   import GetStartedView from "$lib/components/GetStartedView.svelte";
-  import ActiveTxVisualizer from "$lib/components/ActiveTxVisualizer.svelte";
+  import RecentTransactions from "$lib/components/RecentTransactions.svelte";
 
   type TxVisualizerPhase =
     | "idle"
@@ -554,7 +553,7 @@
     const shortAddr = relevantAddr
       ? `${relevantAddr.slice(0, 4)}...${relevantAddr.slice(-4)}`
       : "";
-    const merchant = tx.brantaMerchant;
+    const merchant = tx.brantaMerchant || (relevantAddr ? cachedBrantaMap.get(relevantAddr.trim()) : undefined);
     const merchantName = merchant?.merchantName;
     return {
       id: tx.txid,
@@ -581,8 +580,6 @@
           ? shortAddr
             ? `Fr: ${shortAddr}`
             : ""
-          : merchantName
-            ? merchantName
             : shortAddr
               ? `To: ${shortAddr}`
               : "",
@@ -591,17 +588,12 @@
     };
   });
 
-  const TX_PAGE_SIZE = 3;
+  const TX_PAGE_SIZE = 4;
   let txPageIndex = 0;
   let txTotalPages = 1;
-  let visibleTransactions: typeof transactions = [];
 
   $: txTotalPages = Math.max(1, Math.ceil(transactions.length / TX_PAGE_SIZE));
   $: txPageIndex = Math.min(txPageIndex, txTotalPages - 1);
-  $: visibleTransactions = transactions.slice(
-    txPageIndex * TX_PAGE_SIZE,
-    txPageIndex * TX_PAGE_SIZE + TX_PAGE_SIZE,
-  );
 
   function prevTxPage(): void {
     txPageIndex = Math.max(0, txPageIndex - 1);
@@ -611,127 +603,7 @@
     txPageIndex = Math.min(txTotalPages - 1, txPageIndex + 1);
   }
 
-  // Active transaction visualizer state (shown below transaction history).
-  let activeTxIntentIds: string[] = [];
-  let activeTxCarouselIndex = 0;
-  let activeTxVisualizerTxid: string | null = null;
-  let activeTxVisualizerPhase: TxVisualizerPhase = "idle";
-  let dismissedVisualizerTxids = new Set<string>();
   let clearVisualizerTimer: ReturnType<typeof setTimeout> | null = null;
-  let activeTxExplorerBase = "https://mempool.space";
-  let activeTxSummaryLabel = "";
-
-  // Track outgoing intents for carousel controls and active graph context.
-  $: {
-    const outgoingIntents = $walletStore.transactions
-      .filter((tx) => tx.type === "send")
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .map((tx) => tx.txid);
-
-    activeTxIntentIds = outgoingIntents.filter(
-      (txid) => !dismissedVisualizerTxids.has(txid),
-    );
-
-    if (activeTxIntentIds.length === 0) {
-      activeTxVisualizerTxid = null;
-      activeTxVisualizerPhase = "idle";
-      activeTxCarouselIndex = 0;
-      if (clearVisualizerTimer) {
-        clearTimeout(clearVisualizerTimer);
-        clearVisualizerTimer = null;
-      }
-    } else {
-      const outgoingPending = $walletStore.transactions.find(
-        (tx) => tx.type === "send" && tx.status === "pending",
-      );
-
-      if (
-        !activeTxVisualizerTxid ||
-        !activeTxIntentIds.includes(activeTxVisualizerTxid)
-      ) {
-        activeTxVisualizerTxid = outgoingPending?.txid || activeTxIntentIds[0];
-      }
-
-      if (outgoingPending && activeTxVisualizerTxid === outgoingPending.txid) {
-        activeTxVisualizerTxid = outgoingPending.txid;
-        activeTxVisualizerPhase = "mempool";
-        if (clearVisualizerTimer) {
-          clearTimeout(clearVisualizerTimer);
-          clearVisualizerTimer = null;
-        }
-      }
-
-      const tracked = $walletStore.transactions.find(
-        (tx) => tx.txid === activeTxVisualizerTxid,
-      );
-      activeTxVisualizerPhase =
-        tracked?.status === "confirmed" ? "confirmed" : "mempool";
-
-      activeTxCarouselIndex = Math.max(
-        0,
-        activeTxIntentIds.indexOf(activeTxVisualizerTxid || ""),
-      );
-    }
-  }
-
-  function selectVisualizerIntent(index: number): void {
-    if (index < 0 || index >= activeTxIntentIds.length) return;
-    activeTxCarouselIndex = index;
-    activeTxVisualizerTxid = activeTxIntentIds[index];
-  }
-
-  function cycleVisualizerIntent(direction: -1 | 1): void {
-    if (activeTxIntentIds.length <= 1) return;
-    const nextIndex =
-      (activeTxCarouselIndex + direction + activeTxIntentIds.length) %
-      activeTxIntentIds.length;
-    selectVisualizerIntent(nextIndex);
-  }
-
-  $: activeTxExplorerBase = getActiveExplorerBase(
-    $walletStore.network || "mainnet",
-  );
-
-  $: activeTxSummaryLabel =
-    activeTxIntentIds.length > 0
-      ? `Transaction ${activeTxCarouselIndex + 1} of ${activeTxIntentIds.length}`
-      : "";
-
-  function getTxShortId(txid: string | null): string {
-    if (!txid) return "";
-    return `${txid.slice(0, 8)}...${txid.slice(-6)}`;
-  }
-
-  function removeActiveTxIntent(): void {
-    if (!activeTxVisualizerTxid) return;
-    dismissedVisualizerTxids = new Set(dismissedVisualizerTxids).add(
-      activeTxVisualizerTxid,
-    );
-
-    if (activeTxIntentIds.length <= 1) {
-      activeTxVisualizerTxid = null;
-      activeTxVisualizerPhase = "idle";
-      return;
-    }
-
-    const currentIndex = activeTxIntentIds.indexOf(activeTxVisualizerTxid);
-    const nextIndex =
-      currentIndex <= 0
-        ? 1
-        : Math.min(currentIndex, activeTxIntentIds.length - 1);
-    activeTxVisualizerTxid = activeTxIntentIds[nextIndex] || null;
-  }
-
-  function handleTxVisualizerPhaseChange(phase: string) {
-    if (phase !== "confirmed") return;
-    if (clearVisualizerTimer) clearTimeout(clearVisualizerTimer);
-    clearVisualizerTimer = setTimeout(() => {
-      activeTxVisualizerTxid = null;
-      activeTxVisualizerPhase = "idle";
-      clearVisualizerTimer = null;
-    }, 10000);
-  }
-
   let showSend = false;
   let showReceive = false;
   let sendAmount = "";
@@ -1314,6 +1186,58 @@
     }
     showSendAddressScanner = false;
   }
+
+  let cachedBrantaMap: Map<string, any> = new Map();
+
+  // Load cached metadata if you use local storage caching
+async function loadCachedBrantaMetadata() {
+    try {
+      const raw = await storage.get<string>("pendingBrantaMetadata");
+      console.log("[Branta Debug] Raw storage cache loaded:", raw);
+      if (raw) {
+        const items = JSON.parse(raw);
+        cachedBrantaMap.clear();
+        for (const item of items) {
+          if (item.recipientAddress && item.brantaMerchant) {
+            cachedBrantaMap.set(item.recipientAddress.trim(), item.brantaMerchant);
+          }
+        }
+        console.log("[Branta Debug] Parsed cache map size:", cachedBrantaMap.size);
+      }
+    } catch (e) {
+      console.warn("[Branta Debug] Failed to load cached Branta metadata", e);
+    }
+  }
+
+$: mappedTransactions = $walletStore.transactions.map((tx) => {
+    const type = tx.type === "receive" ? "in" : ("out" as "in" | "out");
+    const amountBtc = tx.amount / 100_000_000;
+    const relevantAddr = type === "in" ? (tx.from ?? "") : (tx.to ?? "");
+    const shortAddr = relevantAddr ? `${relevantAddr.slice(0, 4)}...${relevantAddr.slice(-4)}` : "";
+      
+    const merchant = tx.brantaMerchant || (relevantAddr ? cachedBrantaMap.get(relevantAddr.trim()) : undefined);
+    const merchantName = merchant?.merchantName;
+
+    return {
+      id: tx.txid,
+      type,
+      amount: amountBtc,
+      amountFormatted: amountBtc.toFixed(8).replace(/\.?0+$/, "") || "0",
+      status: tx.status,
+      statusLabel:
+        tx.status === "pending"
+          ? type === "in" ? "Receiving" : merchantName ? `Paying ${merchantName}` : "Sending"
+          : type === "in" ? "Received" : merchantName ? `Sent to ${merchantName}` : "Sent",
+      shortTxId: `${tx.txid.slice(0, 4)}...${tx.txid.slice(-4)}`,
+      timeLabel: formatTxTime(tx.timestamp, tx.status),
+      // Fixed: Properly handles both incoming, merchant, and regular outgoing address labels
+      addressLabel: type === "in"
+        ? (shortAddr ? `Fr: ${shortAddr}` : "")
+        : (shortAddr ? `To: ${shortAddr}` : ""),
+      fiatAmount: btcRate > 0 ? (amountBtc * btcRate).toFixed(2) : "",
+      merchant,
+    };
+  });
 
   function handleSendAddressScannerClose() {
     showSendAddressScanner = false;
@@ -2165,6 +2089,7 @@
 
   onMount(async () => {
     await initializeWalletStore();
+    await loadCachedBrantaMetadata();
     await loadPinHash();
     await loadMempoolFromStorage();
     await checkCameraPermissionOnFirstLoad();
@@ -2177,7 +2102,10 @@
       await fetchWalletDataAndHandleStatus();
       await fetchPrices();
     }
+    console.log("[Page Debug] RecentTransactions mounted. Wallet store transactions count:", $walletStore.transactions?.length);
   });
+    $: console.log("[Page Debug] Wallet store updated. Raw transactions:", $walletStore.transactions);
+
 </script>
 
 <svelte:window on:keydown={handleWalletSettingsEscape} />
@@ -3051,192 +2979,25 @@
           </section>
 
           {#if showBalance}
-            <section
-              class="tx-list fade-in"
-              class:dark-mode={$themeName === "darkPolished"}
-            >
-              <h2>Recent Transactions</h2>
-              {#if transactions.length === 0 && !$walletStore.isLoading}
-                <p class="tx-empty">No transactions yet</p>
-              {:else}
-                <div class="tx-scroll-region" role="region" aria-label="Recent transactions list">
-                  <ul class="tx-list-ul">
-                    {#each visibleTransactions as tx (tx.id)}
-                      <li
-                        class="tx-item"
-                        class:in={tx.type === "in"}
-                        class:out={tx.type === "out"}
-                      >
-                        <button
-                          type="button"
-                          class="tx-item-btn"
-                          on:click={() => openTxInMempool(tx.id)}
-                        >
-                          <div class="tx-row tx-row-main">
-                            <div class="tx-status-wrap">
-                              {#if tx.merchant}
-                                <div class="tx-merchant-icon-wrap">
-                                  <img
-                                    src={tx.merchant.logoUrl || outIcon}
-                                    alt={tx.merchant.merchantName}
-                                    class="tx-merchant-icon"
-                                    on:error={(e) => {
-                                      const img = e.currentTarget as HTMLImageElement;
-                                      img.src = outIcon;
-                                    }}
-                                  />
-                                  <span class="tx-merchant-check" aria-hidden="true">✓</span>
-                                </div>
-                              {:else}
-                                <img
-                                  src={tx.status === "pending"
-                                    ? pendingIcon
-                                    : tx.type === "in"
-                                      ? inIcon
-                                      : outIcon}
-                                  alt=""
-                                  class="tx-status-icon"
-                                  width="20"
-                                  height="20"
-                                />
-                              {/if}
-                              <span class="tx-status-text">{tx.statusLabel}</span>
-                            </div>
-                            <span
-                              class="tx-amount"
-                              class:in={tx.type === "in"}
-                              class:out={tx.type === "out"}
-                            >
-                              {tx.type === "in" ? "+" : "-"}{tx.amountFormatted}
-                              <span class="tx-unit">BTC</span>
-                            </span>
-                          </div>
-                          {#if tx.addressLabel}
-                            <div class="tx-row tx-row-address">
-                              <span class="tx-address-label"
-                                >{tx.addressLabel}</span
-                              >
-                              {#if tx.fiatAmount}
-                                <span class="tx-fiat"
-                                  >~{fiatSymbol}{tx.fiatAmount}</span
-                                >
-                              {/if}
-                            </div>
-                          {/if}
-                          <div class="tx-row tx-row-meta">
-                            <span class="tx-id-label"
-                              >Tx: <span class="tx-id-value">{tx.shortTxId}</span
-                              ></span
-                            >
-                            <span class="tx-time">{tx.timeLabel}</span>
-                          </div>
-                        </button>
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
-                {#if transactions.length > 0}
-                  <div class="tx-list-footer">
-                    {#if txTotalPages > 1}
-                      <div class="tx-page-controls">
-                        <button
-                          type="button"
-                          class="tx-page-btn"
-                          on:click={prevTxPage}
-                          disabled={txPageIndex === 0}
-                        >
-                          Prev
-                        </button>
-                        <span class="tx-page-indicator">
-                          {txPageIndex + 1} / {txTotalPages}
-                        </span>
-                        <button
-                          type="button"
-                          class="tx-page-btn"
-                          on:click={nextTxPage}
-                          disabled={txPageIndex >= txTotalPages - 1}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    {/if}
-                    {#if $walletStore.isLoadingMoreTransactions}
-                      <p class="tx-list-footer-loading">Loading more…</p>
-                    {:else if $walletStore.hasMoreTransactions && txPageIndex >= txTotalPages - 1}
-                      <button
-                        type="button"
-                        class="tx-list-load-more"
-                        on:click={() => fetchMoreTransactions()}
-                      >
-                        Load more
-                      </button>
-                    {/if}
-                  </div>
-                {/if}
-              {/if}
-
-              {#if activeTxVisualizerTxid}
-                <div class="active-tx-visualizer-wrap">
-                  {#if activeTxIntentIds.length > 1}
-                    <div class="active-tx-carousel-header">
-                      <button
-                        type="button"
-                        class="carousel-btn"
-                        on:click={() => cycleVisualizerIntent(-1)}
-                        aria-label="Previous transaction"
-                        title="Previous transaction"
-                      >
-                        &#8249;
-                      </button>
-                      <div class="carousel-meta">
-                        <span class="carousel-title">{activeTxSummaryLabel}</span>
-                        <span class="carousel-txid">{getTxShortId(activeTxVisualizerTxid)}</span>
-                      </div>
-                      <button
-                        type="button"
-                        class="carousel-btn"
-                        on:click={() => cycleVisualizerIntent(1)}
-                        aria-label="Next transaction"
-                        title="Next transaction"
-                      >
-                        &#8250;
-                      </button>
-                      <button
-                        type="button"
-                        class="carousel-btn remove-btn"
-                        on:click={removeActiveTxIntent}
-                        aria-label="Remove completed transaction"
-                        title="Remove completed transaction"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div class="active-tx-dots" role="tablist" aria-label="Transaction selector">
-                      {#each activeTxIntentIds as txIntentId, i}
-                        <button
-                          type="button"
-                          class="active-tx-dot"
-                          class:active={i === activeTxCarouselIndex}
-                          on:click={() => selectVisualizerIntent(i)}
-                          role="tab"
-                          aria-selected={i === activeTxCarouselIndex}
-                          aria-label={`Show transaction ${i + 1}: ${getTxShortId(txIntentId)}`}
-                          title={getTxShortId(txIntentId)}
-                        ></button>
-                      {/each}
-                    </div>
-                  {/if}
-                  <ActiveTxVisualizer
-                    txid={activeTxVisualizerTxid}
-                    network={$walletStore.network}
-                    initialPhase={activeTxVisualizerPhase}
-                    explorerBaseUrl={activeTxExplorerBase}
-                    compact={true}
-                    onPhaseChange={handleTxVisualizerPhaseChange}
-                  />
-                </div>
-              {/if}
-            </section>
+            <RecentTransactions
+              transactions={mappedTransactions}
+              visibleTransactions={mappedTransactions.slice(txPageIndex * TX_PAGE_SIZE, (txPageIndex + 1) * TX_PAGE_SIZE)}
+              isLoading={$walletStore.isLoading}
+              isLoadingMore={$walletStore.isLoadingMoreTransactions}
+              hasMore={$walletStore.hasMoreTransactions}
+              network={$walletStore.network}
+              themeName={$themeName}
+              {fiatSymbol}
+              {inIcon}
+              {outIcon}
+              {pendingIcon}
+              {txPageIndex}
+              {txTotalPages}
+              {prevTxPage}
+              {nextTxPage}
+              {fetchMoreTransactions}
+              {openTxInMempool}
+            />
           {:else}
             <section class="tx-list-hidden fade-in">
               <p class="empty">Balance/Transactions hidden</p>
@@ -4871,15 +4632,6 @@
     min-width: 0;
   }
 
-  .tx-list h2 {
-    margin: 0 0 10px 0;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-textSecondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
   .tx-empty {
     text-align: center;
     font-size: 14px;
@@ -5160,11 +4912,7 @@
     flex-shrink: 0;
     opacity: 0.9;
   }
-  /* Dark mode: tint tx list icons light for contrast */
-  .tx-list.dark-mode .tx-status-icon {
-    filter: brightness(0) invert(1);
-    opacity: 0.95;
-  }
+
   .tx-merchant-icon-wrap {
     position: relative;
     width: 32px;
@@ -5314,12 +5062,6 @@
 
     .tx-scroll-region {
       padding-right: 1px;
-    }
-
-    .tx-list h2 {
-      margin: 0 0 6px 0;
-      font-size: 11px;
-      line-height: 1.2;
     }
 
     .tx-list-ul {
