@@ -31,10 +31,7 @@
     switchAddressType,
     addressTypeUISelection,
   } from "$lib/stores/wallet";
-  import {
-    networkStore,
-    setNetwork,
-  } from "$lib/stores/network";
+  import { networkStore, setNetwork } from "$lib/stores/network";
   import { qr } from "$lib/services/qr";
   import { psbt } from "$lib/services/psbt";
   import QRScannerPopup from "$lib/components/QRScannerPopup.svelte";
@@ -166,8 +163,7 @@
   // Detect if running as a full-page tab (expanded view) vs popup.
   // When opened as a popup the window is constrained; as a tab it fills the viewport.
   const isExpandedView =
-    typeof window !== "undefined" &&
-    window.innerWidth > 600;
+    typeof window !== "undefined" && window.innerWidth > 600;
   let isHeaderUtilitiesExpanded = false;
 
   function toggleHeaderUtilities(): void {
@@ -179,7 +175,11 @@
   }
 
   function openExpandedView() {
-    if (typeof chrome !== "undefined" && chrome.runtime?.getURL && chrome.tabs) {
+    if (
+      typeof chrome !== "undefined" &&
+      chrome.runtime?.getURL &&
+      chrome.tabs
+    ) {
       const appUrl = chrome.runtime.getURL("popup.html");
       chrome.tabs.query({ url: appUrl }, (tabs) => {
         if (tabs.length > 0 && tabs[0].id != null) {
@@ -440,7 +440,7 @@
 
     // Also clear multi-network paired wallet storage
     try {
-      await chrome.storage.local.remove('pairedWallets');
+      await chrome.storage.local.remove("pairedWallets");
     } catch {}
 
     await resetWallet();
@@ -449,17 +449,17 @@
   }
 
   // Network change handler (used inside Wallet Details modal)
-  async function handleNetworkChange(newNetwork: 'mainnet' | 'testnet') {
+  async function handleNetworkChange(newNetwork: "mainnet" | "testnet") {
     if (isTogglingNetwork || $networkStore.network === newNetwork) return;
     isTogglingNetwork = true;
     try {
       await setNetwork(newNetwork);
       // Refresh balances & tx history immediately for the new network
       await refreshWalletData();
-      triggerToast(`Switched to ${newNetwork}`, 'success');
+      triggerToast(`Switched to ${newNetwork}`, "success");
     } catch (err) {
-      console.error('[WalletDetails] Network switch failed:', err);
-      triggerToast('Failed to switch network', 'error');
+      console.error("[WalletDetails] Network switch failed:", err);
+      triggerToast("Failed to switch network", "error");
     } finally {
       isTogglingNetwork = false;
     }
@@ -536,8 +536,7 @@
 
   // Convert wallet transactions to UI format (app-aligned: status, amount, address, txid, time)
   $: btcRate = btcRateForFiat;
-  $: activeAddressTypeId =
-    $walletStore.hdState?.addressType || "segwit-native";
+  $: activeAddressTypeId = $walletStore.hdState?.addressType || "segwit-native";
   $: settingsHighlightedAddressType =
     $addressTypeUISelection ?? activeAddressTypeId;
   // Reactive short preview — uses the network-aware receive address
@@ -553,7 +552,9 @@
     const shortAddr = relevantAddr
       ? `${relevantAddr.slice(0, 4)}...${relevantAddr.slice(-4)}`
       : "";
-    const merchant = tx.brantaMerchant || (relevantAddr ? cachedBrantaMap.get(relevantAddr.trim()) : undefined);
+    const merchant =
+      tx.brantaMerchant ||
+      (relevantAddr ? cachedBrantaMap.get(relevantAddr.trim()) : undefined);
     const merchantName = merchant?.merchantName;
     return {
       id: tx.txid,
@@ -580,9 +581,9 @@
           ? shortAddr
             ? `Fr: ${shortAddr}`
             : ""
-            : shortAddr
-              ? `To: ${shortAddr}`
-              : "",
+          : shortAddr
+            ? `To: ${shortAddr}`
+            : "",
       fiatAmount: btcRate > 0 ? (amountBtc * btcRate).toFixed(2) : "",
       merchant,
     };
@@ -628,7 +629,7 @@
 
   // Reactive receive address & path — updates when network or HD state changes
   $: {
-    void $networkStore.network;          // subscribe to network changes
+    void $networkStore.network; // subscribe to network changes
     void $walletStore.hdState;
     void $walletStore.address;
 
@@ -639,7 +640,7 @@
     } else if ($walletStore.address) {
       receiveAddress = $walletStore.address;
       // Build correct derivation path label from network
-      const coin = $networkStore.network === 'testnet' ? "1'" : "0'";
+      const coin = $networkStore.network === "testnet" ? "1'" : "0'";
       receiveDerivationPath = `m/84'/${coin}/0'/0/0`;
     } else {
       receiveAddress = "No address configured";
@@ -680,9 +681,7 @@
     return 0;
   }
 
-  function inferAddressNetwork(
-    address: string,
-  ): "mainnet" | "testnet" | null {
+  function inferAddressNetwork(address: string): "mainnet" | "testnet" | null {
     const a = (address || "").trim().toLowerCase();
     if (!a) return null;
     if (a.startsWith("bc1") || a.startsWith("1") || a.startsWith("3")) {
@@ -699,13 +698,11 @@
     return null;
   }
 
-  function resolveNetworkAddressCandidate(
-    wallet: {
-      network?: "mainnet" | "testnet";
-      address?: string;
-      addresses?: Array<{ address: string }>;
-    },
-  ): { network: "mainnet" | "testnet"; address: string } {
+  function resolveNetworkAddressCandidate(wallet: {
+    network?: "mainnet" | "testnet";
+    address?: string;
+    addresses?: Array<{ address: string }>;
+  }): { network: "mainnet" | "testnet"; address: string } {
     const fallbackNetwork = wallet.network || "mainnet";
     const currentAddress = wallet.address || "";
     const currentAddressNetwork = inferAddressNetwork(currentAddress);
@@ -716,7 +713,7 @@
     }
 
     const compatible = (wallet.addresses || []).find(
-      a => inferAddressNetwork(a.address) === resolvedNetwork,
+      (a) => inferAddressNetwork(a.address) === resolvedNetwork,
     );
 
     if (compatible?.address) {
@@ -846,7 +843,8 @@
     return /^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(candidate);
   }
 
-  let sendBrantaLookupOverride: { address: string; payload: string } | null = null;
+  let sendBrantaLookupOverride: { address: string; payload: string } | null =
+    null;
 
   function hasBrantaPayloadMarkers(value: string): boolean {
     const lower = value.toLowerCase();
@@ -900,7 +898,10 @@
     isFlagged?: boolean;
     riskLabel?: string;
   } | null {
-    const payload = data as { payment?: Record<string, unknown>; verifyUrl?: string } | null;
+    const payload = data as {
+      payment?: Record<string, unknown>;
+      verifyUrl?: string;
+    } | null;
     if (!payload?.payment) return null;
 
     const payment = payload.payment;
@@ -921,14 +922,19 @@
 
     const nestedLogoUrl =
       typeof payment.logo === "object" && payment.logo !== null
-        ? firstString((payment.logo as Record<string, unknown>).url, (payment.logo as Record<string, unknown>).src)
+        ? firstString(
+            (payment.logo as Record<string, unknown>).url,
+            (payment.logo as Record<string, unknown>).src,
+          )
         : undefined;
 
     const nestedMerchantLogoUrl =
-      merchantRecord && typeof merchantRecord.logo === "object" && merchantRecord.logo !== null
+      merchantRecord &&
+      typeof merchantRecord.logo === "object" &&
+      merchantRecord.logo !== null
         ? firstString(
             (merchantRecord.logo as Record<string, unknown>).url,
-            (merchantRecord.logo as Record<string, unknown>).src
+            (merchantRecord.logo as Record<string, unknown>).src,
           )
         : undefined;
 
@@ -936,7 +942,7 @@
       typeof payment.metadata === "object" && payment.metadata !== null
         ? firstString(
             (payment.metadata as Record<string, unknown>).logoUrl,
-            (payment.metadata as Record<string, unknown>).logo
+            (payment.metadata as Record<string, unknown>).logo,
           )
         : undefined;
 
@@ -949,17 +955,29 @@
           return `https:${normalizedInput}`;
         }
         if (normalizedInput.startsWith("ipfs://")) {
-          const cidPath = normalizedInput.replace(/^ipfs:\/\//i, "").replace(/^ipfs\//i, "");
+          const cidPath = normalizedInput
+            .replace(/^ipfs:\/\//i, "")
+            .replace(/^ipfs\//i, "");
           return `https://ipfs.io/ipfs/${cidPath}`;
         }
-        if (/^https?:\/\//i.test(normalizedInput) || normalizedInput.startsWith("data:") || normalizedInput.startsWith("blob:")) {
+        if (
+          /^https?:\/\//i.test(normalizedInput) ||
+          normalizedInput.startsWith("data:") ||
+          normalizedInput.startsWith("blob:")
+        ) {
           return normalizedInput;
         }
         // Handle relative paths returned by API payloads.
         if (normalizedInput.startsWith("/")) {
-          if (typeof payload?.verifyUrl === "string" && payload.verifyUrl.trim()) {
+          if (
+            typeof payload?.verifyUrl === "string" &&
+            payload.verifyUrl.trim()
+          ) {
             const base = new URL(payload.verifyUrl);
-            return new URL(normalizedInput, `${base.protocol}//${base.host}`).toString();
+            return new URL(
+              normalizedInput,
+              `${base.protocol}//${base.host}`,
+            ).toString();
           }
           return new URL(normalizedInput, "https://branta.pro").toString();
         }
@@ -983,11 +1001,13 @@
         merchantRecord?.displayName ||
         merchantRecord?.brandName ||
         merchantRecord?.organizationName ||
-        "Verified Merchant"
+        "Verified Merchant",
     ).trim();
 
     const status = String(payment.status || "").toLowerCase();
-    const riskLevel = String(payment.riskLevel || payment.risk || "").toLowerCase();
+    const riskLevel = String(
+      payment.riskLevel || payment.risk || "",
+    ).toLowerCase();
     const flagged =
       payment.isFlagged === true ||
       status === "flagged" ||
@@ -997,15 +1017,16 @@
       riskLevel === "critical";
 
     const parsed = {
-      merchantId: String(
-        payment.merchantId ||
-          payment.id ||
-          payment._id ||
-          merchantRecord?.merchantId ||
-          merchantRecord?.id ||
-          merchantRecord?._id ||
-          ""
-      ).trim() || undefined,
+      merchantId:
+        String(
+          payment.merchantId ||
+            payment.id ||
+            payment._id ||
+            merchantRecord?.merchantId ||
+            merchantRecord?.id ||
+            merchantRecord?._id ||
+            "",
+        ).trim() || undefined,
       merchantName,
       logoUrl: normalizeLogoUrl(
         firstString(
@@ -1024,12 +1045,14 @@
           merchantRecord?.logo,
           nestedLogoUrl,
           nestedMerchantLogoUrl,
-          metadataLogoUrl
-        )
+          metadataLogoUrl,
+        ),
       ),
-      verifyUrl: String(payload.verifyUrl || payment.verifyUrl || "").trim() || undefined,
+      verifyUrl:
+        String(payload.verifyUrl || payment.verifyUrl || "").trim() ||
+        undefined,
       isFlagged: flagged,
-      riskLabel: flagged ? (riskLevel || status || "flagged") : undefined,
+      riskLabel: flagged ? riskLevel || status || "flagged" : undefined,
     };
 
     return parsed;
@@ -1072,6 +1095,21 @@
         },
       });
       await storage.set(key, JSON.stringify(fresh.slice(-50)));
+
+      // --- SVELTE REACTIVITY FIX ---
+      // Clone the existing map into a new instance
+      const updatedMap = new Map(cachedBrantaMap);
+
+      // Update the new map
+      updatedMap.set(recipientAddress.trim(), {
+        merchantId: brantaResult.merchantId,
+        merchantName: brantaResult.merchantName,
+        logoUrl: brantaResult.logoUrl,
+        verifyUrl: brantaResult.verifyUrl,
+      });
+
+      // Reassign to trigger the reactive $: mappedTransactions block
+      cachedBrantaMap = updatedMap;
     } catch (error) {
       console.warn("[popup] Failed to cache pending Branta metadata", error);
     }
@@ -1080,7 +1118,7 @@
   async function runBrantaLookup(
     lookupPayload: string,
     sourceValue: string,
-    isQrCode: boolean
+    isQrCode: boolean,
   ): Promise<void> {
     const currentLookupSeq = ++brantaLookupSeq;
     const lookupAddress = (sourceValue || "").trim();
@@ -1097,7 +1135,10 @@
       });
 
       // Ignore stale responses from prior lookups (common while typing/pasting).
-      if (currentLookupSeq !== brantaLookupSeq || lookupAddress !== (sendAddress || "").trim()) {
+      if (
+        currentLookupSeq !== brantaLookupSeq ||
+        lookupAddress !== (sendAddress || "").trim()
+      ) {
         return;
       }
 
@@ -1108,7 +1149,10 @@
 
       brantaResult = parseBrantaResult(response.data);
     } catch (error) {
-      if (currentLookupSeq !== brantaLookupSeq || lookupAddress !== (sendAddress || "").trim()) {
+      if (
+        currentLookupSeq !== brantaLookupSeq ||
+        lookupAddress !== (sendAddress || "").trim()
+      ) {
         return;
       }
       console.warn("[Branta][SendBTC] Lookup errored", {
@@ -1158,7 +1202,7 @@
       void runBrantaLookup(
         lookupCandidate.payload!,
         candidate,
-        lookupCandidate.isQrCode === true
+        lookupCandidate.isQrCode === true,
       );
     }, 400);
   }
@@ -1190,32 +1234,42 @@
   let cachedBrantaMap: Map<string, any> = new Map();
 
   // Load cached metadata if you use local storage caching
-async function loadCachedBrantaMetadata() {
+  async function loadCachedBrantaMetadata() {
     try {
       const raw = await storage.get<string>("pendingBrantaMetadata");
       console.log("[Branta Debug] Raw storage cache loaded:", raw);
       if (raw) {
         const items = JSON.parse(raw);
-        cachedBrantaMap.clear();
+
+        // 1. Create a completely fresh Map instance
+        const tempMap = new Map();
+
         for (const item of items) {
           if (item.recipientAddress && item.brantaMerchant) {
-            cachedBrantaMap.set(item.recipientAddress.trim(), item.brantaMerchant);
+            tempMap.set(item.recipientAddress.trim(), item.brantaMerchant);
           }
         }
-        console.log("[Branta Debug] Parsed cache map size:", cachedBrantaMap.size);
+        console.log("[Branta Debug] Parsed cache map size:", tempMap.size);
+
+        // 2. Assigning the fresh object forces Svelte to re-evaluate mappedTransactions
+        cachedBrantaMap = tempMap;
       }
     } catch (e) {
       console.warn("[Branta Debug] Failed to load cached Branta metadata", e);
     }
   }
 
-$: mappedTransactions = $walletStore.transactions.map((tx) => {
+  $: mappedTransactions = $walletStore.transactions.map((tx) => {
     const type = tx.type === "receive" ? "in" : ("out" as "in" | "out");
     const amountBtc = tx.amount / 100_000_000;
     const relevantAddr = type === "in" ? (tx.from ?? "") : (tx.to ?? "");
-    const shortAddr = relevantAddr ? `${relevantAddr.slice(0, 4)}...${relevantAddr.slice(-4)}` : "";
-      
-    const merchant = tx.brantaMerchant || (relevantAddr ? cachedBrantaMap.get(relevantAddr.trim()) : undefined);
+    const shortAddr = relevantAddr
+      ? `${relevantAddr.slice(0, 4)}...${relevantAddr.slice(-4)}`
+      : "";
+
+    const merchant =
+      tx.brantaMerchant ||
+      (relevantAddr ? cachedBrantaMap.get(relevantAddr.trim()) : undefined);
     const merchantName = merchant?.merchantName;
 
     return {
@@ -1226,14 +1280,27 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       status: tx.status,
       statusLabel:
         tx.status === "pending"
-          ? type === "in" ? "Receiving" : merchantName ? `Paying ${merchantName}` : "Sending"
-          : type === "in" ? "Received" : merchantName ? `Sent to ${merchantName}` : "Sent",
+          ? type === "in"
+            ? "Receiving"
+            : merchantName
+              ? `Paying ${merchantName}`
+              : "Sending"
+          : type === "in"
+            ? "Received"
+            : merchantName
+              ? `Sent to ${merchantName}`
+              : "Sent",
       shortTxId: `${tx.txid.slice(0, 4)}...${tx.txid.slice(-4)}`,
       timeLabel: formatTxTime(tx.timestamp, tx.status),
       // Fixed: Properly handles both incoming, merchant, and regular outgoing address labels
-      addressLabel: type === "in"
-        ? (shortAddr ? `Fr: ${shortAddr}` : "")
-        : (shortAddr ? `To: ${shortAddr}` : ""),
+      addressLabel:
+        type === "in"
+          ? shortAddr
+            ? `Fr: ${shortAddr}`
+            : ""
+          : shortAddr
+            ? `To: ${shortAddr}`
+            : "",
       fiatAmount: btcRate > 0 ? (amountBtc * btcRate).toFixed(2) : "",
       merchant,
     };
@@ -1289,7 +1356,8 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
   $: {
     void $walletStore.hdState;
     const hdAddr = getCurrentReceiveAddress();
-    receiveAddress = hdAddr?.address || $walletStore.address || "No address configured";
+    receiveAddress =
+      hdAddr?.address || $walletStore.address || "No address configured";
     receiveDerivationPath = hdAddr?.path || "";
   }
 
@@ -1413,12 +1481,22 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
           : "mainnet"
         : null;
 
-    if (declaredNetwork && inferredFromAddress && declaredNetwork !== inferredFromAddress) {
-      console.warn("[pairing] Network declaration/address format mismatch; preferring address format", {
-        declaredNetwork,
-        inferredFromAddress,
-        addressPreview: typeof addr === "string" ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : null,
-      });
+    if (
+      declaredNetwork &&
+      inferredFromAddress &&
+      declaredNetwork !== inferredFromAddress
+    ) {
+      console.warn(
+        "[pairing] Network declaration/address format mismatch; preferring address format",
+        {
+          declaredNetwork,
+          inferredFromAddress,
+          addressPreview:
+            typeof addr === "string"
+              ? `${addr.slice(0, 6)}...${addr.slice(-4)}`
+              : null,
+        },
+      );
       return inferredFromAddress;
     }
 
@@ -1454,7 +1532,9 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       let paired = !!persistedPublicKey.trim();
 
       if (!paired && result?.data?.publicKey) {
-        console.warn("[pairing] Scan produced key material but store was empty; applying direct pairing fallback");
+        console.warn(
+          "[pairing] Scan produced key material but store was empty; applying direct pairing fallback",
+        );
         await updateWalletFromPairing(result.data);
         await initializeWalletStore();
         persistedPublicKey = (await storage.get<string>("publicKey")) || "";
@@ -1502,13 +1582,15 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
         }
       } else {
         const latestAfter = get(walletStore);
-        console.warn('[pairing] No publicKey after processScanedQR', {
+        console.warn("[pairing] No publicKey after processScanedQR", {
           publicKey: latestAfter.publicKey,
           persistedPublicKey,
           addresses: latestAfter.addresses?.length,
           resultNetwork: result?.data?.network,
           resultHasChainCode: !!result?.data?.chainCode,
-          resultHasAddress: !!(result?.data?.address || result?.data?.addresses),
+          resultHasAddress: !!(
+            result?.data?.address || result?.data?.addresses
+          ),
         });
         pairingStatus = "Pairing response received but no key was stored";
         // Stay on scanner or go back? Go back to options
@@ -1611,17 +1693,34 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
   }
 
   // Reactive address format list — reflects the currently selected network
-  $: ADDRESS_TYPES = $networkStore.network === 'testnet'
-    ? [
-        { id: "segwit-native" as const, label: "Native SegWit", prefix: "tb1q..." },
-        { id: "segwit-nested" as const, label: "SegWit Compatible", prefix: "2..." },
-        { id: "legacy" as const, label: "Legacy", prefix: "m... / n..." },
-      ]
-    : [
-        { id: "segwit-native" as const, label: "Native SegWit", prefix: "bc1q..." },
-        { id: "segwit-nested" as const, label: "SegWit Compatible", prefix: "3..." },
-        { id: "legacy" as const, label: "Legacy", prefix: "1..." },
-      ];
+  $: ADDRESS_TYPES =
+    $networkStore.network === "testnet"
+      ? [
+          {
+            id: "segwit-native" as const,
+            label: "Native SegWit",
+            prefix: "tb1q...",
+          },
+          {
+            id: "segwit-nested" as const,
+            label: "SegWit Compatible",
+            prefix: "2...",
+          },
+          { id: "legacy" as const, label: "Legacy", prefix: "m... / n..." },
+        ]
+      : [
+          {
+            id: "segwit-native" as const,
+            label: "Native SegWit",
+            prefix: "bc1q...",
+          },
+          {
+            id: "segwit-nested" as const,
+            label: "SegWit Compatible",
+            prefix: "3...",
+          },
+          { id: "legacy" as const, label: "Legacy", prefix: "1..." },
+        ];
 
   async function handleSelectAddressType(
     typeId: "segwit-native" | "segwit-nested" | "legacy",
@@ -1743,7 +1842,12 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
         const [fees, utxos] = await Promise.all([
           blockchain
             .getFeeEstimates()
-            .catch(() => ({ fastestFee: 2, halfHourFee: 1, hourFee: 1, minimumFee: 1 })),
+            .catch(() => ({
+              fastestFee: 2,
+              halfHourFee: 1,
+              hourFee: 1,
+              minimumFee: 1,
+            })),
           blockchain.getUTXOs(address).catch(() => []),
         ]);
         sendFeeEstimates = fees;
@@ -1751,7 +1855,12 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       } else {
         sendFeeEstimates = await blockchain
           .getFeeEstimates()
-          .catch(() => ({ fastestFee: 2, halfHourFee: 1, hourFee: 1, minimumFee: 1 }));
+          .catch(() => ({
+            fastestFee: 2,
+            halfHourFee: 1,
+            hourFee: 1,
+            minimumFee: 1,
+          }));
       }
     } catch (e) {
       console.warn("Send modal: failed to load fees/utxos", e);
@@ -1835,7 +1944,7 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
 
       // Use aggregated tagged UTXOs from HD wallet store
       const taggedUtxos = (wallet.utxos || []).filter(
-        u => inferAddressNetwork(u.address) === network,
+        (u) => inferAddressNetwork(u.address) === network,
       );
       if (taggedUtxos.length === 0) {
         throw new Error("No UTXOs available for spending");
@@ -1854,7 +1963,12 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       if (!feeRateUsed || feeRateUsed <= 0) {
         const feeEst = await blockchain
           .getFeeEstimates()
-          .catch(() => ({ fastestFee: 2, halfHourFee: 1, hourFee: 1, minimumFee: 1 }));
+          .catch(() => ({
+            fastestFee: 2,
+            halfHourFee: 1,
+            hourFee: 1,
+            minimumFee: 1,
+          }));
         feeRateUsed =
           feeEst.hourFee ?? feeEst.halfHourFee ?? feeEst.fastestFee ?? 5;
       }
@@ -1863,7 +1977,10 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       }
 
       const estimatedVsize = 140;
-      const estimatedFeeSats = Math.max(1, Math.ceil(estimatedVsize * feeRateUsed));
+      const estimatedFeeSats = Math.max(
+        1,
+        Math.ceil(estimatedVsize * feeRateUsed),
+      );
       if (amountSats + estimatedFeeSats > balanceSats) {
         throw new Error(
           `Total (amount + fee) exceeds balance. Have ${balanceSats} sats, need ${amountSats + estimatedFeeSats} sats.`,
@@ -1910,7 +2027,10 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
         showQRModal = true;
         message =
           "Open your mobile wallet and scan this QR to complete the send natively.";
-        triggerToast("Send QR generated. Scan with mobile to complete.", "success");
+        triggerToast(
+          "Send QR generated. Scan with mobile to complete.",
+          "success",
+        );
         setTimeout(() => {
           message = "";
         }, 1200);
@@ -1957,7 +2077,9 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
         message =
           "Failed to prepare a secure connection to your mobile device. Please try again — if this persists, re-pair your device.";
         triggerToast(message, "error");
-      } else if (/HTTP 5\d\d|NetworkError|Failed to fetch|timed? ?out/i.test(errMsg)) {
+      } else if (
+        /HTTP 5\d\d|NetworkError|Failed to fetch|timed? ?out/i.test(errMsg)
+      ) {
         message =
           "Network error while preparing the transaction. Please check your connection and try again.";
         triggerToast(message, "error");
@@ -2102,10 +2224,15 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       await fetchWalletDataAndHandleStatus();
       await fetchPrices();
     }
-    console.log("[Page Debug] RecentTransactions mounted. Wallet store transactions count:", $walletStore.transactions?.length);
+    console.log(
+      "[Page Debug] RecentTransactions mounted. Wallet store transactions count:",
+      $walletStore.transactions?.length,
+    );
   });
-    $: console.log("[Page Debug] Wallet store updated. Raw transactions:", $walletStore.transactions);
-
+  $: console.log(
+    "[Page Debug] Wallet store updated. Raw transactions:",
+    $walletStore.transactions,
+  );
 </script>
 
 <svelte:window on:keydown={handleWalletSettingsEscape} />
@@ -2266,7 +2393,13 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
               height="20"
               aria-hidden="true"
             >
-              <path d="M3 3h5.5M3 3v5.5M3 3l6 6M17 17h-5.5M17 17v-5.5M17 17l-6-6" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+              <path
+                d="M3 3h5.5M3 3v5.5M3 3l6 6M17 17h-5.5M17 17v-5.5M17 17l-6-6"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
           </button>
         {/if}
@@ -2419,168 +2552,176 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
         tabindex="-1"
         on:click|stopPropagation
       >
-      <div class="wallet-settings-head">
-        <h2 id="wallet-settings-title" class="wallet-settings-title">
-          Wallet details
-        </h2>
-        <button
-          type="button"
-          class="wallet-settings-close"
-          on:click={closeWalletSettingsMenu}
-          aria-label="Close wallet settings"
-        >✕</button>
-      </div>
-
-      <div class="wallet-settings-body">
-      <section class="wallet-settings-block">
-        <h3 class="wallet-settings-label">Fingerprint</h3>
-        <p class="wallet-settings-hint">
-          Short fingerprint for this wallet
-        </p>
-        <div class="wallet-settings-fingerprint-row">
-          <span class="wallet-settings-fingerprint-value">
-            {keyshareFingerprintDisplay}
-          </span>
+        <div class="wallet-settings-head">
+          <h2 id="wallet-settings-title" class="wallet-settings-title">
+            Wallet details
+          </h2>
           <button
             type="button"
-            class="wallet-id-copy"
-            on:click={copyWalletFingerprint}
-            disabled={keyshareFingerprintDisplay === "N/A"}
-            title="Copy fingerprint"
-            aria-label="Copy fingerprint"
+            class="wallet-settings-close"
+            on:click={closeWalletSettingsMenu}
+            aria-label="Close wallet settings">✕</button
           >
-            Copy
-          </button>
         </div>
-      </section>
 
-      <section class="wallet-settings-block">
-        <h3 class="wallet-settings-label">Appearance</h3>
-        <div class="wallet-settings-row">
-          <span class="wallet-settings-row-text">
-            {$themeName === "darkPolished" ? "Dark theme" : "Light theme"}
-          </span>
-          <button
-            type="button"
-            class="wallet-settings-theme-btn"
-            on:click={toggleTheme}
-            title={$themeName === "darkPolished"
-              ? "Switch to light mode"
-              : "Switch to dark mode"}
-          >
-            <img
-              src={$themeName === "darkPolished" ? lightIcon : darkIcon}
-              alt=""
-              class="header-icon"
-              width="20"
-              height="20"
-            />
-          </button>
-        </div>
-      </section>
-
-      <!-- Network / Environment Toggle (moved from header into Wallet Details) -->
-      <section class="wallet-settings-block">
-        <h3 class="wallet-settings-label">Network</h3>
-        <p class="wallet-settings-hint">Switch between Mainnet and Testnet (developer mode).</p>
-        <div class="network-toggle-row">
-          <button
-            type="button"
-            class="network-pill"
-            class:active={$networkStore.network === 'mainnet'}
-            on:click={() => handleNetworkChange('mainnet')}
-            disabled={isTogglingNetwork}
-          >
-            Mainnet
-          </button>
-          <button
-            type="button"
-            class="network-pill testnet"
-            class:active={$networkStore.network === 'testnet'}
-            on:click={() => handleNetworkChange('testnet')}
-            disabled={isTogglingNetwork}
-          >
-            Testnet
-          </button>
-        </div>
-        {#if $networkStore.isTestnet}
-          <div class="testnet-badge-inline">TESTNET — developer mode active</div>
-        {/if}
-      </section>
-
-      <section class="wallet-settings-block">
-        <h3 class="wallet-settings-label">Receiving address format</h3>
-        {#if selectedAddressShort}
-          <p class="wallet-settings-address-preview">{selectedAddressShort}</p>
-        {/if}
-        {#if $walletStore.publicKey}
-          {#if $addressTypeUISelection}
-            <p class="wallet-settings-switching" aria-live="polite">
-              Switching to {$addressTypeUISelection === "segwit-native"
-                ? "Native SegWit"
-                : $addressTypeUISelection === "segwit-nested"
-                  ? "SegWit compatible"
-                  : "Legacy"}… fetching addresses
+        <div class="wallet-settings-body">
+          <section class="wallet-settings-block">
+            <h3 class="wallet-settings-label">Fingerprint</h3>
+            <p class="wallet-settings-hint">
+              Short fingerprint for this wallet
             </p>
-          {/if}
-          <ul class="wallet-settings-address-list">
-            {#each ADDRESS_TYPES as atype}
-              <li>
-                <button
-                  type="button"
-                  class="address-item wallet-settings-address-item"
-                  class:active={settingsHighlightedAddressType === atype.id}
-                  disabled={!!$addressTypeUISelection}
-                  on:click={() => handleSelectAddressType(atype.id)}
-                >
-                  <img
-                    src={addressTypeIcon}
-                    alt=""
-                    class="address-type-icon"
-                    width="18"
-                    height="18"
-                  />
-                  <div class="address-info">
-                    <div class="address-text">{atype.label}</div>
-                    <div class="address-prefix">{atype.prefix}</div>
-                  </div>
-                  {#if settingsHighlightedAddressType === atype.id}
-                    <span class="address-check">✓</span>
-                  {/if}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {:else}
-          <button
-            type="button"
-            class="wallet-settings-sync-btn"
-            disabled={requestingAddresses}
-            on:click={onSettingsSyncAddresses}
-          >
-            {requestingAddresses ? "Opening…" : "Sync addresses from mobile"}
-          </button>
-        {/if}
-      </section>
+            <div class="wallet-settings-fingerprint-row">
+              <span class="wallet-settings-fingerprint-value">
+                {keyshareFingerprintDisplay}
+              </span>
+              <button
+                type="button"
+                class="wallet-id-copy"
+                on:click={copyWalletFingerprint}
+                disabled={keyshareFingerprintDisplay === "N/A"}
+                title="Copy fingerprint"
+                aria-label="Copy fingerprint"
+              >
+                Copy
+              </button>
+            </div>
+          </section>
 
-      <section class="wallet-settings-block wallet-settings-danger">
-        <button
-          type="button"
-          class="wallet-settings-unpair-btn"
-          on:click={handleUnpair}
-        >
-          <img
-            src={deleteIcon}
-            alt=""
-            class="wallet-settings-unpair-icon"
-            width="18"
-            height="18"
-          />
-          Unpair wallet
-        </button>
-      </section>
+          <section class="wallet-settings-block">
+            <h3 class="wallet-settings-label">Appearance</h3>
+            <div class="wallet-settings-row">
+              <span class="wallet-settings-row-text">
+                {$themeName === "darkPolished" ? "Dark theme" : "Light theme"}
+              </span>
+              <button
+                type="button"
+                class="wallet-settings-theme-btn"
+                on:click={toggleTheme}
+                title={$themeName === "darkPolished"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"}
+              >
+                <img
+                  src={$themeName === "darkPolished" ? lightIcon : darkIcon}
+                  alt=""
+                  class="header-icon"
+                  width="20"
+                  height="20"
+                />
+              </button>
+            </div>
+          </section>
+
+          <!-- Network / Environment Toggle (moved from header into Wallet Details) -->
+          <section class="wallet-settings-block">
+            <h3 class="wallet-settings-label">Network</h3>
+            <p class="wallet-settings-hint">
+              Switch between Mainnet and Testnet (developer mode).
+            </p>
+            <div class="network-toggle-row">
+              <button
+                type="button"
+                class="network-pill"
+                class:active={$networkStore.network === "mainnet"}
+                on:click={() => handleNetworkChange("mainnet")}
+                disabled={isTogglingNetwork}
+              >
+                Mainnet
+              </button>
+              <button
+                type="button"
+                class="network-pill testnet"
+                class:active={$networkStore.network === "testnet"}
+                on:click={() => handleNetworkChange("testnet")}
+                disabled={isTogglingNetwork}
+              >
+                Testnet
+              </button>
+            </div>
+            {#if $networkStore.isTestnet}
+              <div class="testnet-badge-inline">
+                TESTNET — developer mode active
+              </div>
+            {/if}
+          </section>
+
+          <section class="wallet-settings-block">
+            <h3 class="wallet-settings-label">Receiving address format</h3>
+            {#if selectedAddressShort}
+              <p class="wallet-settings-address-preview">
+                {selectedAddressShort}
+              </p>
+            {/if}
+            {#if $walletStore.publicKey}
+              {#if $addressTypeUISelection}
+                <p class="wallet-settings-switching" aria-live="polite">
+                  Switching to {$addressTypeUISelection === "segwit-native"
+                    ? "Native SegWit"
+                    : $addressTypeUISelection === "segwit-nested"
+                      ? "SegWit compatible"
+                      : "Legacy"}… fetching addresses
+                </p>
+              {/if}
+              <ul class="wallet-settings-address-list">
+                {#each ADDRESS_TYPES as atype}
+                  <li>
+                    <button
+                      type="button"
+                      class="address-item wallet-settings-address-item"
+                      class:active={settingsHighlightedAddressType === atype.id}
+                      disabled={!!$addressTypeUISelection}
+                      on:click={() => handleSelectAddressType(atype.id)}
+                    >
+                      <img
+                        src={addressTypeIcon}
+                        alt=""
+                        class="address-type-icon"
+                        width="18"
+                        height="18"
+                      />
+                      <div class="address-info">
+                        <div class="address-text">{atype.label}</div>
+                        <div class="address-prefix">{atype.prefix}</div>
+                      </div>
+                      {#if settingsHighlightedAddressType === atype.id}
+                        <span class="address-check">✓</span>
+                      {/if}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <button
+                type="button"
+                class="wallet-settings-sync-btn"
+                disabled={requestingAddresses}
+                on:click={onSettingsSyncAddresses}
+              >
+                {requestingAddresses
+                  ? "Opening…"
+                  : "Sync addresses from mobile"}
+              </button>
+            {/if}
+          </section>
+
+          <section class="wallet-settings-block wallet-settings-danger">
+            <button
+              type="button"
+              class="wallet-settings-unpair-btn"
+              on:click={handleUnpair}
+            >
+              <img
+                src={deleteIcon}
+                alt=""
+                class="wallet-settings-unpair-icon"
+                width="18"
+                height="18"
+              />
+              Unpair wallet
+            </button>
+          </section>
+        </div>
       </div>
-    </div>
     </div>
   {/if}
 
@@ -2637,7 +2778,9 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                   {unlockError}
                 </p>
               {/if}
-              <button type="submit" class="btn-primary pin-submit">Unlock</button>
+              <button type="submit" class="btn-primary pin-submit"
+                >Unlock</button
+              >
             </form>
           </div>
         </div>
@@ -2711,7 +2854,10 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
             height="56"
           />
           <h2 class="pin-screen-title">Set your PIN</h2>
-          <form on:submit|preventDefault={handleSetPin} class="pin-form pin-form-confirm">
+          <form
+            on:submit|preventDefault={handleSetPin}
+            class="pin-form pin-form-confirm"
+          >
             <input
               type="password"
               inputmode="numeric"
@@ -2981,7 +3127,10 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
           {#if showBalance}
             <RecentTransactions
               transactions={mappedTransactions}
-              visibleTransactions={mappedTransactions.slice(txPageIndex * TX_PAGE_SIZE, (txPageIndex + 1) * TX_PAGE_SIZE)}
+              visibleTransactions={mappedTransactions.slice(
+                txPageIndex * TX_PAGE_SIZE,
+                (txPageIndex + 1) * TX_PAGE_SIZE,
+              )}
               isLoading={$walletStore.isLoading}
               isLoadingMore={$walletStore.isLoadingMoreTransactions}
               hasMore={$walletStore.hasMoreTransactions}
@@ -3078,7 +3227,11 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                   </button>
                 </div>
                 {#if isVerifying}
-                  <div class="send-branta-status checking" role="status" aria-live="polite">
+                  <div
+                    class="send-branta-status checking"
+                    role="status"
+                    aria-live="polite"
+                  >
                     <span class="send-branta-spinner" aria-hidden="true"></span>
                     <span>Verifying with Branta...</span>
                   </div>
@@ -3117,8 +3270,7 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                         class="send-branta-link"
                         href={brantaResult.verifyUrl}
                         target="_blank"
-                        rel="noreferrer"
-                        >Proof ↗</a
+                        rel="noreferrer">Proof ↗</a
                       >
                     {/if}
                   </div>
@@ -3184,7 +3336,9 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                       <span class="send-summary-value">
                         {sendEstimatedFeeSats} sats
                         {#if sendFeeFiat > 0}
-                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendFeeFiat)}</span>
+                          <span class="send-summary-fiat"
+                            >≈ {fiatSymbol}{formatPrice(sendFeeFiat)}</span
+                          >
                         {/if}
                       </span>
                     </div>
@@ -3193,7 +3347,9 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                       <span class="send-summary-value">
                         {(sendAmountSats / 1e8).toFixed(8)} BTC
                         {#if sendAmountFiat > 0}
-                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendAmountFiat)}</span>
+                          <span class="send-summary-fiat"
+                            >≈ {fiatSymbol}{formatPrice(sendAmountFiat)}</span
+                          >
                         {/if}
                       </span>
                     </div>
@@ -3205,7 +3361,9 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                       >
                         {(sendTotalSats / 1e8).toFixed(8)} BTC
                         {#if sendTotalFiat > 0}
-                          <span class="send-summary-fiat">≈ {fiatSymbol}{formatPrice(sendTotalFiat)}</span>
+                          <span class="send-summary-fiat"
+                            >≈ {fiatSymbol}{formatPrice(sendTotalFiat)}</span
+                          >
                         {/if}
                       </span>
                     </div>
@@ -3298,7 +3456,7 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                   >
                 </div>
                 <div class="receive-modal-badge">
-                  {$networkStore.network === 'testnet' ? 'Testnet' : 'Mainnet'}
+                  {$networkStore.network === "testnet" ? "Testnet" : "Mainnet"}
                 </div>
                 {#if receiveQRDataUrl}
                   <div class="receive-qr-wrap">
@@ -3317,7 +3475,9 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
                 {/if}
                 <div class="receive-address-section">
                   {#if receiveDerivationPath}
-                    <span class="receive-derivation-path">{receiveDerivationPath}</span>
+                    <span class="receive-derivation-path"
+                      >{receiveDerivationPath}</span
+                    >
                   {/if}
                   <button
                     type="button"
@@ -3603,8 +3763,6 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
     background: var(--color-background);
   }
 
-
-
   .popup-root {
     width: 100%;
     min-width: 0;
@@ -3651,7 +3809,8 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       transform 0.2s,
       box-shadow 0.2s;
     box-shadow:
-      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      inset 0 1px 0 0
+        color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
       0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
     backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
     -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
@@ -3736,7 +3895,8 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
     border-bottom: 1px solid var(--glass-stroke, var(--color-border));
     flex-shrink: 0;
     background: var(--glass-pane-bg, var(--color-cardBackground));
-    backdrop-filter: blur(var(--glass-blur, 20px)) saturate(var(--glass-sat, 160%));
+    backdrop-filter: blur(var(--glass-blur, 20px))
+      saturate(var(--glass-sat, 160%));
     -webkit-backdrop-filter: blur(var(--glass-blur, 20px))
       saturate(var(--glass-sat, 160%));
     z-index: 1;
@@ -4169,7 +4329,8 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
       box-shadow 0.2s;
     font-size: 16px;
     box-shadow:
-      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
+      inset 0 1px 0 0
+        color-mix(in srgb, var(--glass-inset-highlight, #fff) 40%, transparent),
       0 1px 6px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
     backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
     -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
@@ -4422,7 +4583,8 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
   }
   :global([data-theme="darkPolished"]) .address-dropdown {
     box-shadow:
-      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 30%, transparent),
+      inset 0 1px 0 0
+        color-mix(in srgb, var(--glass-inset-highlight, #fff) 30%, transparent),
       0 12px 40px rgba(0, 0, 0, 0.45);
     border-top: 1px solid var(--color-border);
     border-radius: 0 0 10px 10px;
@@ -5346,7 +5508,11 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
     font-size: 12px;
     line-height: 1.3;
     border: 1px solid var(--color-border);
-    background: color-mix(in srgb, var(--color-cardBackground) 80%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--color-cardBackground) 80%,
+      transparent
+    );
     color: var(--color-textSecondary);
   }
 
@@ -5839,7 +6005,8 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
     backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
     -webkit-backdrop-filter: blur(12px) saturate(var(--glass-sat, 165%));
     box-shadow:
-      inset 0 1px 0 0 color-mix(in srgb, var(--glass-inset-highlight, #fff) 35%, transparent),
+      inset 0 1px 0 0
+        color-mix(in srgb, var(--glass-inset-highlight, #fff) 35%, transparent),
       0 2px 10px color-mix(in srgb, var(--color-shadowColor) 5%, transparent);
     transition:
       background 0.2s,
@@ -5863,7 +6030,8 @@ $: mappedTransactions = $walletStore.transactions.map((tx) => {
     align-items: center;
     padding: 2px 6px;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--color-error) 45%, var(--color-border));
+    border: 1px solid
+      color-mix(in srgb, var(--color-error) 45%, var(--color-border));
     background: color-mix(in srgb, var(--color-error) 12%, transparent);
     color: var(--color-error, #c22d2d);
     font-size: 10px;

@@ -4,30 +4,30 @@
  * Supports pairing, address requests, and PSBT signing
  */
 
-import QRCode from 'qrcode';
-import CryptoJS from 'crypto-js';
-import logo from '$lib/assets/logo.png';
-import { writable } from 'svelte/store';
-import { updateWalletFromPairing, updateAddresses } from '$lib/stores/wallet';
-import { psbt } from './psbt';
+import QRCode from "qrcode";
+import CryptoJS from "crypto-js";
+import logo from "$lib/assets/logo.png";
+import { writable } from "svelte/store";
+import { updateWalletFromPairing, updateAddresses } from "$lib/stores/wallet";
+import { psbt } from "./psbt";
 import {
   parseExtensionResponse,
   isBoldBindResponse,
   getBoldBindPairingCodeStorageKey,
-} from './extensionBind';
-import { setNetwork } from '$lib/stores/network';
+} from "./extensionBind";
+import { setNetwork } from "$lib/stores/network";
 
-export type QRDataType = 
-  | 'pairing' 
-  | 'address_request' 
-  | 'psbt_signing' 
-  | 'pairing_response' 
-  | 'pairing_code' /* short numeric pairing codes (4-8 digits) from some mobile flows */
-  | 'address_response' 
-  | 'psbt_signed'
-  | 'public_key'
-  | 'bitcoin_address'
-  | 'payment_request';
+export type QRDataType =
+  | "pairing"
+  | "address_request"
+  | "psbt_signing"
+  | "pairing_response"
+  | "pairing_code" /* short numeric pairing codes (4-8 digits) from some mobile flows */
+  | "address_response"
+  | "psbt_signed"
+  | "public_key"
+  | "bitcoin_address"
+  | "payment_request";
 
 export interface QRData {
   type: QRDataType;
@@ -38,9 +38,9 @@ export interface QRData {
 
 export interface QRSession {
   id: string;
-  type: QRData['type'];
+  type: QRData["type"];
   qrCodeDataUrl?: string;
-  status: 'generating' | 'awaiting_scan' | 'completed' | 'failed';
+  status: "generating" | "awaiting_scan" | "completed" | "failed";
   createdAt: number;
   result?: any;
   error?: string;
@@ -55,24 +55,25 @@ export const encodeSendBitcoinQR = (
   toAddress: string,
   amountSats: number | string,
   feeSats: number | string,
-  spendingHash: string = '',
-  addressType: string = '',
-  derivationPath: string = '',
-  network: string = '',
-  utxosJson: string = '',
-  changeAddress: string = '',
-  txId: string = ''
+  spendingHash: string = "",
+  addressType: string = "",
+  derivationPath: string = "",
+  network: string = "",
+  utxosJson: string = "",
+  changeAddress: string = "",
+  txId: string = "",
 ): string => {
-  const amount = typeof amountSats === 'string' ? amountSats : amountSats.toString();
-  const fee = typeof feeSats === 'string' ? feeSats : feeSats.toString();
+  const amount =
+    typeof amountSats === "string" ? amountSats : amountSats.toString();
+  const fee = typeof feeSats === "string" ? feeSats : feeSats.toString();
   const payload: Record<string, string> = {
-    txId: txId || '',
+    txId: txId || "",
     toAddress,
     amountSats: amount,
     feeSats: fee,
-    network: network || '',
-    addressType: addressType || '',
-    derivationPath: derivationPath || '',
+    network: network || "",
+    addressType: addressType || "",
+    derivationPath: derivationPath || "",
   };
   if (spendingHash) payload.spendingHash = spendingHash;
   if (utxosJson) payload.utxosJson = utxosJson;
@@ -87,58 +88,63 @@ class QRService {
   // Machine-to-machine payloads (like PSBT) are more reliable without logo overlays.
   private async generatePlainQRCode(
     payload: string,
-    options?: { width?: number; errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H' }
+    options?: { width?: number; errorCorrectionLevel?: "L" | "M" | "Q" | "H" },
   ): Promise<string> {
     return QRCode.toDataURL(payload, {
-      errorCorrectionLevel: options?.errorCorrectionLevel ?? 'M',
+      errorCorrectionLevel: options?.errorCorrectionLevel ?? "M",
       margin: 2,
       width: options?.width ?? 520,
-      color: { dark: '#000000', light: '#ffffff' }
+      color: { dark: "#000000", light: "#ffffff" },
     });
   }
 
-  private async generateQRCode(data: unknown, options?: { width?: number }): Promise<string> {
-    const payload = typeof data === 'string' ? data : JSON.stringify(data);
+  private async generateQRCode(
+    data: unknown,
+    options?: { width?: number },
+  ): Promise<string> {
+    const payload = typeof data === "string" ? data : JSON.stringify(data);
     const width = options?.width ?? 360;
 
-    if (typeof document === 'undefined') {
+    if (typeof document === "undefined") {
       return QRCode.toDataURL(payload, {
-        errorCorrectionLevel: 'H',
+        errorCorrectionLevel: "H",
         margin: 2,
         width,
-        color: { dark: '#000000', light: '#ffffff' }
+        color: { dark: "#000000", light: "#ffffff" },
       });
     }
 
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
 
     await QRCode.toCanvas(canvas, payload, {
-      errorCorrectionLevel: 'H',
+      errorCorrectionLevel: "H",
       margin: 2,
       width,
-      color: { dark: '#000000', light: '#ffffff' }
+      color: { dark: "#000000", light: "#ffffff" },
     });
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return canvas.toDataURL('image/png');
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return canvas.toDataURL("image/png");
 
     const img: HTMLImageElement = new Image();
     img.src = logo;
-    const decodeFn = (img as HTMLImageElement & { decode?: () => Promise<void> }).decode;
-    if (typeof decodeFn === 'function') {
+    const decodeFn = (
+      img as HTMLImageElement & { decode?: () => Promise<void> }
+    ).decode;
+    if (typeof decodeFn === "function") {
       try {
         await decodeFn.call(img);
       } catch {
         // fallback to onload
         await new Promise<void>((resolve, reject) => {
           img.onload = () => resolve();
-          img.onerror = () => reject(new Error('Failed to load logo'));
+          img.onerror = () => reject(new Error("Failed to load logo"));
         });
       }
     } else {
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load logo'));
+        img.onerror = () => reject(new Error("Failed to load logo"));
       });
     }
 
@@ -148,7 +154,7 @@ class QRService {
     const radius = Math.round(size * 0.18);
 
     ctx.save();
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = "#ffffff";
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
     ctx.lineTo(x + size - radius, y);
@@ -165,7 +171,7 @@ class QRService {
 
     ctx.drawImage(img, x, y, size, size);
 
-    return canvas.toDataURL('image/png');
+    return canvas.toDataURL("image/png");
   }
 
   /**
@@ -173,26 +179,26 @@ class QRService {
    */
   async generatePairingQR(): Promise<string> {
     const id = `pair-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    
+
     const qrData: QRData = {
-      type: 'pairing',
+      type: "pairing",
       data: {
-        action: 'request_public_key',
-        extensionId: chrome?.runtime?.id || 'web',
-        timestamp: Date.now()
+        action: "request_public_key",
+        extensionId: chrome?.runtime?.id || "web",
+        timestamp: Date.now(),
       },
       timestamp: Date.now(),
-      id
+      id,
     };
 
     const qrCodeDataUrl = await this.generateQRCode(qrData);
 
     this.currentSession.set({
       id,
-      type: 'pairing',
+      type: "pairing",
       qrCodeDataUrl,
-      status: 'awaiting_scan',
-      createdAt: Date.now()
+      status: "awaiting_scan",
+      createdAt: Date.now(),
     });
 
     return qrCodeDataUrl;
@@ -206,16 +212,16 @@ class QRService {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const key = getBoldBindPairingCodeStorageKey();
     await new Promise<void>((resolve) =>
-      chrome.storage.local.set({ [key]: code }, resolve)
+      chrome.storage.local.set({ [key]: code }, resolve),
     );
     const payload = `pairing_code=${code}`;
     const qrCodeDataUrl = await this.generateQRCode(payload);
     const id = `pair-code-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     this.currentSession.set({
       id,
-      type: 'pairing',
+      type: "pairing",
       qrCodeDataUrl,
-      status: 'awaiting_scan',
+      status: "awaiting_scan",
       createdAt: Date.now(),
     });
     return qrCodeDataUrl;
@@ -226,25 +232,25 @@ class QRService {
    */
   async requestAddresses(): Promise<string> {
     const id = `addr-req-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    
+
     const qrData: QRData = {
-      type: 'address_request',
+      type: "address_request",
       data: {
-        action: 'get_addresses',
-        maxAddresses: 3
+        action: "get_addresses",
+        maxAddresses: 3,
       },
       timestamp: Date.now(),
-      id
+      id,
     };
 
     const qrCodeDataUrl = await this.generateQRCode(qrData);
 
     this.currentSession.set({
       id,
-      type: 'address_request',
+      type: "address_request",
       qrCodeDataUrl,
-      status: 'awaiting_scan',
-      createdAt: Date.now()
+      status: "awaiting_scan",
+      createdAt: Date.now(),
     });
 
     return qrCodeDataUrl;
@@ -256,21 +262,23 @@ class QRService {
   async generatePsbtQR(psbt: string): Promise<string> {
     const id = `psbt-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    const compactPsbt = (psbt || '').replace(/\s+/g, '');
+    const compactPsbt = (psbt || "").replace(/\s+/g, "");
     if (!compactPsbt) {
-      throw new Error('Cannot generate PSBT QR: empty PSBT payload');
+      throw new Error("Cannot generate PSBT QR: empty PSBT payload");
     }
 
     // Raw base64 PSBT (no JSON envelope) keeps density down; logo needs 'H' ECC (30%
     // recovery) so the dense PSBT payload still decodes cleanly with the center obscured.
-    const qrCodeDataUrl = await this.generateQRCode(compactPsbt, { width: 560 });
+    const qrCodeDataUrl = await this.generateQRCode(compactPsbt, {
+      width: 560,
+    });
 
     this.currentSession.set({
       id,
-      type: 'psbt_signing',
+      type: "psbt_signing",
       qrCodeDataUrl,
-      status: 'awaiting_scan',
-      createdAt: Date.now()
+      status: "awaiting_scan",
+      createdAt: Date.now(),
     });
 
     return qrCodeDataUrl;
@@ -281,10 +289,10 @@ class QRService {
    */
   async generateAddressQR(address: string): Promise<string> {
     return QRCode.toDataURL(address, {
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: "M",
       margin: 2,
       width: 200,
-      color: { dark: '#000000', light: '#ffffff' }
+      color: { dark: "#000000", light: "#ffffff" },
     });
   }
 
@@ -296,39 +304,62 @@ class QRService {
     toAddress: string,
     amountSats: number | string,
     feeSats: number | string,
-    spendingHash: string = '',
-    addressType: string = '',
-    derivationPath: string = '',
-    network: string = '',
-    utxosJson: string = '',
-    changeAddress: string = '',
-    txId: string = ''
+    spendingHash: string = "",
+    addressType: string = "",
+    derivationPath: string = "",
+    network: string = "",
+    utxosJson: string = "",
+    changeAddress: string = "",
+    txId: string = "",
   ): Promise<{ dataUrl: string; payload: string; txId: string }> {
     const id = `send-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     // Reuse the caller's own transaction id (e.g. psbt.ts's psbtId) when provided, so a
     // mobile device that scans this QR (instead of receiving the Nostr push) joins the
     // same co-sign room rather than minting its own `native-send-...` id and deadlocking.
-    const resolvedTxId = txId && txId.trim() !== '' ? txId.trim() : id;
+    const resolvedTxId = txId && txId.trim() !== "" ? txId.trim() : id;
 
-    const basePayload = encodeSendBitcoinQR(toAddress, amountSats, feeSats, '', addressType, derivationPath, network, utxosJson, changeAddress, resolvedTxId);
-    const computedHash = spendingHash || CryptoJS.SHA256(basePayload + Date.now()).toString();
-    const payload = encodeSendBitcoinQR(toAddress, amountSats, feeSats, computedHash, addressType, derivationPath, network, utxosJson, changeAddress, resolvedTxId);
+    const basePayload = encodeSendBitcoinQR(
+      toAddress,
+      amountSats,
+      feeSats,
+      "",
+      addressType,
+      derivationPath,
+      network,
+      utxosJson,
+      changeAddress,
+      resolvedTxId,
+    );
+    const computedHash =
+      spendingHash || CryptoJS.SHA256(basePayload + Date.now()).toString();
+    const payload = encodeSendBitcoinQR(
+      toAddress,
+      amountSats,
+      feeSats,
+      computedHash,
+      addressType,
+      derivationPath,
+      network,
+      utxosJson,
+      changeAddress,
+      resolvedTxId,
+    );
 
     try {
       const dataUrl = await this.generateQRCode(payload);
 
       this.currentSession.set({
         id,
-        type: 'payment_request',
+        type: "payment_request",
         qrCodeDataUrl: dataUrl,
-        status: 'awaiting_scan',
+        status: "awaiting_scan",
         createdAt: Date.now(),
-        result: { payload }
+        result: { payload },
       });
 
       return { dataUrl, payload, txId: resolvedTxId };
     } catch (err) {
-      console.error('[QR] Failed to generate send QR', err);
+      console.error("[QR] Failed to generate send QR", err);
       throw err;
     }
   }
@@ -337,64 +368,69 @@ class QRService {
    * Process scanned QR code data
    * Supports multiple formats: JSON pairing data, raw public keys, Bitcoin addresses, etc.
    */
-  async processScanedQR(qrText: string): Promise<{ type: QRDataType; data: any }> {
+  async processScanedQR(
+    qrText: string,
+  ): Promise<{ type: QRDataType; data: any }> {
     try {
-
       // BIP-21 URI + Testnet auto-detect (bitcoin:<addr>?network=testnet or tb1/m/n/2 prefixes)
       const bip21Match = qrText.match(/^bitcoin:([^?]+)(\?.*)?$/i);
       if (bip21Match) {
         const address = bip21Match[1];
-        const query = bip21Match[2] || '';
+        const query = bip21Match[2] || "";
         const isTestnet =
-          /network=testnet/i.test(query) ||
-          /^tb1q|^tb1p|^[mn2]/.test(address);
+          /network=testnet/i.test(query) || /^tb1q|^tb1p|^[mn2]/.test(address);
 
         if (isTestnet) {
           // Switch global network store so blockchain service uses /testnet/api
-          await setNetwork('testnet');
+          await setNetwork("testnet");
         }
 
         // Treat as a plain Bitcoin address (Testnet or Mainnet)
         return {
-          type: 'bitcoin_address',
-          data: { address, network: isTestnet ? 'testnet' : 'mainnet' }
+          type: "bitcoin_address",
+          data: { address, network: isTestnet ? "testnet" : "mainnet" },
         };
       }
 
       // Bold mobile bind response (swimlanes.io): base64 67-byte response from mobile
-      if (typeof qrText === 'string' && isBoldBindResponse(qrText)) {
+      if (typeof qrText === "string" && isBoldBindResponse(qrText)) {
         const storageKey = getBoldBindPairingCodeStorageKey();
-        const stored = await new Promise<Record<string, string | undefined>>((resolve) => {
-          chrome.storage.local.get([storageKey], (items: Record<string, string | undefined>) => {
-            resolve(items);
-          });
-        });
+        const stored = await new Promise<Record<string, string | undefined>>(
+          (resolve) => {
+            chrome.storage.local.get(
+              [storageKey],
+              (items: Record<string, string | undefined>) => {
+                resolve(items);
+              },
+            );
+          },
+        );
         const code = stored?.[storageKey];
         if (!code) {
           throw new Error(
-            'No pairing code in session. Show the extension pairing QR first (pairing_code=...), then scan the mobile response.'
+            "No pairing code in session. Show the extension pairing QR first (pairing_code=...), then scan the mobile response.",
           );
         }
         const result = parseExtensionResponse(qrText.trim(), code);
         if (!result.valid) {
           throw new Error(
-            'Invalid response: checksum mismatch. Ensure you scanned the QR from the Bold mobile app.'
+            "Invalid response: checksum mismatch. Ensure you scanned the QR from the Bold mobile app.",
           );
         }
         const pairingData = {
           publicKey: result.pubKey,
           chainCode: result.chainCode,
-          deviceId: 'mobile-wallet',
-          network: 'mainnet',
+          deviceId: "mobile-wallet",
+          network: "mainnet",
         };
         await this.handlePairingResponse(pairingData);
-        return { type: 'pairing_response', data: pairingData };
+        return { type: "pairing_response", data: pairingData };
       }
 
       // Compact encrypted pairing payload: pair:<cipherB64Url>.<ivHex>.<code>
-      if (typeof qrText === 'string' && qrText.trim().startsWith('pair:')) {
+      if (typeof qrText === "string" && qrText.trim().startsWith("pair:")) {
         const compact = qrText.trim().slice(5);
-        const parts = compact.split('.');
+        const parts = compact.split(".");
         let cipherUrl: string | undefined;
         let ivHex: string | undefined;
         let code: string | undefined;
@@ -403,7 +439,9 @@ class QRService {
           [cipherUrl, ivHex, code] = parts;
         } else {
           // Fallback: infer from suffix (32 hex iv + 6-digit code)
-          const suffixMatch = compact.match(/([A-Za-z0-9_-]+)([0-9a-fA-F]{32})(\d{6})$/);
+          const suffixMatch = compact.match(
+            /([A-Za-z0-9_-]+)([0-9a-fA-F]{32})(\d{6})$/,
+          );
           if (suffixMatch) {
             cipherUrl = suffixMatch[1];
             ivHex = suffixMatch[2];
@@ -412,58 +450,66 @@ class QRService {
         }
 
         if (cipherUrl && ivHex && code) {
-          const cipher = cipherUrl
-            .replace(/-/g, '+')
-            .replace(/_/g, '/');
-          const padded = cipher + '='.repeat((4 - (cipher.length % 4)) % 4);
-          const pairingData = await this.processPairingData({ c: padded, i: ivHex, k: code });
-          return { type: 'pairing_response', data: pairingData };
+          const cipher = cipherUrl.replace(/-/g, "+").replace(/_/g, "/");
+          const padded = cipher + "=".repeat((4 - (cipher.length % 4)) % 4);
+          const pairingData = await this.processPairingData({
+            c: padded,
+            i: ivHex,
+            k: code,
+          });
+          return { type: "pairing_response", data: pairingData };
         }
       }
-      
+
       // First, try to parse as JSON (structured QR data)
       try {
         const qrData = JSON.parse(qrText);
 
         // Handle structured QR data with explicit type
-        if (qrData.type === 'pairing_response') {
+        if (qrData.type === "pairing_response") {
           const pairingData = await this.processPairingData(qrData.data);
-          return { type: 'pairing_response', data: pairingData };
-        } else if (qrData.type === 'address_response') {
+          return { type: "pairing_response", data: pairingData };
+        } else if (qrData.type === "address_response") {
           this.handleAddressResponse(qrData.data);
-          return { type: 'address_response', data: qrData.data };
-        } else if (qrData.type === 'psbt_signed') {
+          return { type: "address_response", data: qrData.data };
+        } else if (qrData.type === "psbt_signed") {
           this.handleSignedPsbt(qrData.data);
-          return { type: 'psbt_signed', data: qrData.data };
-        } else if (qrData.type === 'public_key') {
+          return { type: "psbt_signed", data: qrData.data };
+        } else if (qrData.type === "public_key") {
           // Direct public key sharing
           const pairingData = await this.processPairingData(qrData.data);
-          return { type: 'public_key', data: pairingData };
+          return { type: "public_key", data: pairingData };
         }
-        
+
         // Handle the new standardized PairingPayload (addresses/pubKeys as objects or flat strings)
-        if (qrData.version === '1.0' && qrData.network && (qrData.addresses || qrData.address)) {
+        if (
+          qrData.version === "1.0" &&
+          qrData.network &&
+          (qrData.addresses || qrData.address)
+        ) {
           const payloadNetwork =
-            qrData.network === 'mainnet'
-              ? 'mainnet'
-              : qrData.network === 'testnet4'
-                ? 'testnet4'
-                : 'testnet';
-          const normalizedNetwork = payloadNetwork === 'mainnet' ? 'mainnet' : 'testnet';
+            qrData.network === "mainnet"
+              ? "mainnet"
+              : qrData.network === "testnet4"
+                ? "testnet4"
+                : "testnet";
+          const normalizedNetwork =
+            payloadNetwork === "mainnet" ? "mainnet" : "testnet";
           const selectedAddress =
-            typeof qrData.addresses === 'string'
+            typeof qrData.addresses === "string"
               ? qrData.addresses
-              : normalizedNetwork === 'testnet'
-                ? (qrData.addresses?.testnet || qrData.addresses?.testnet4)
+              : normalizedNetwork === "testnet"
+                ? qrData.addresses?.testnet || qrData.addresses?.testnet4
                 : qrData.addresses?.mainnet;
           const selectedPubKey =
             qrData.publicKey ||
-            (normalizedNetwork === 'testnet'
-              ? (qrData.pubKeys?.testnet || qrData.pubKeys?.testnet4)
+            (normalizedNetwork === "testnet"
+              ? qrData.pubKeys?.testnet || qrData.pubKeys?.testnet4
               : qrData.pubKeys?.mainnet);
           const selectedAddressOrFlat = selectedAddress || qrData.address;
           const selectedPubKeyOrFlat =
-            selectedPubKey || (typeof qrData.pubKeys === 'string' ? qrData.pubKeys : undefined);
+            selectedPubKey ||
+            (typeof qrData.pubKeys === "string" ? qrData.pubKeys : undefined);
           const pairingData = {
             publicKey: selectedPubKeyOrFlat,
             chainCode:
@@ -472,7 +518,7 @@ class QRService {
               qrData.chainCodeHex ||
               qrData.chain_code_hex ||
               qrData.cc,
-            deviceId: qrData.deviceId || 'mobile-wallet',
+            deviceId: qrData.deviceId || "mobile-wallet",
             network: payloadNetwork,
             address: selectedAddressOrFlat,
             addresses: qrData.addresses,
@@ -486,7 +532,7 @@ class QRService {
             cc: qrData.cc,
           };
           const processed = await this.processPairingData(pairingData);
-          return { type: 'pairing_response', data: processed };
+          return { type: "pairing_response", data: processed };
         }
 
         // Handle JSON without explicit type but with publicKey field (common mobile app format)
@@ -494,31 +540,36 @@ class QRService {
           const pairingData = {
             publicKey: qrData.publicKey,
             chainCode: qrData.chainCode,
-            deviceId: qrData.deviceId || 'mobile-wallet',
-            network: qrData.network || 'mainnet',
+            deviceId: qrData.deviceId || "mobile-wallet",
+            network: qrData.network || "mainnet",
             address: qrData.address,
             addresses: qrData.addresses,
             nostr_npub: qrData.nostr_npub,
           };
           const processed = await this.processPairingData(pairingData);
-          return { type: 'pairing_response', data: processed };
+          return { type: "pairing_response", data: processed };
         }
 
         // Handle JSON with just data field (wrapped format)
         if (qrData.data && qrData.data.publicKey) {
           const pairingData = await this.processPairingData(qrData.data);
-          return { type: 'pairing_response', data: pairingData };
+          return { type: "pairing_response", data: pairingData };
         }
 
-        this.currentSession.update(s => s ? { ...s, status: 'completed', result: qrData } : null);
-        return { type: qrData.type || 'pairing_response', data: qrData };
+        this.currentSession.update((s) =>
+          s ? { ...s, status: "completed", result: qrData } : null,
+        );
+        return { type: qrData.type || "pairing_response", data: qrData };
       } catch (jsonErr) {
         // Not valid JSON on first pass — try tolerating common encodings and wrappers
 
         let candidate = qrText.trim();
 
         // Remove surrounding quotes if present
-        if ((candidate.startsWith('"') && candidate.endsWith('"')) || (candidate.startsWith("'") && candidate.endsWith("'"))) {
+        if (
+          (candidate.startsWith('"') && candidate.endsWith('"')) ||
+          (candidate.startsWith("'") && candidate.endsWith("'"))
+        ) {
           candidate = candidate.slice(1, -1);
         }
 
@@ -533,14 +584,17 @@ class QRService {
         }
 
         // If it's a data URL (e.g., data:application/json;base64,eyJ... ), decode base64
-        const dataUrlMatch = candidate.match(/^data:(?:application\/(?:json\+)?json|text\/plain);base64,(.+)$/i);
+        const dataUrlMatch = candidate.match(
+          /^data:(?:application\/(?:json\+)?json|text\/plain);base64,(.+)$/i,
+        );
         if (dataUrlMatch) {
           try {
             const b64 = dataUrlMatch[1];
             // Browser-friendly base64 decode
             const binary = atob(b64);
             const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            for (let i = 0; i < binary.length; i++)
+              bytes[i] = binary.charCodeAt(i);
             const decoded = new TextDecoder().decode(bytes);
             candidate = decoded;
           } catch (e) {
@@ -552,43 +606,45 @@ class QRService {
         try {
           const qrData = JSON.parse(candidate);
 
-          if (qrData.type === 'pairing_response') {
+          if (qrData.type === "pairing_response") {
             const pairingData = await this.processPairingData(qrData.data);
-            return { type: 'pairing_response', data: pairingData };
+            return { type: "pairing_response", data: pairingData };
           }
 
           if (qrData.publicKey) {
             const pairingData = {
               publicKey: qrData.publicKey,
               chainCode: qrData.chainCode,
-              deviceId: qrData.deviceId || 'mobile-wallet',
-              network: qrData.network || 'mainnet',
+              deviceId: qrData.deviceId || "mobile-wallet",
+              network: qrData.network || "mainnet",
               address: qrData.address,
               addresses: qrData.addresses,
               nostr_npub: qrData.nostr_npub,
             };
             const processed = await this.processPairingData(pairingData);
-            return { type: 'pairing_response', data: processed };
+            return { type: "pairing_response", data: processed };
           }
 
           if (qrData.data && qrData.data.publicKey) {
             const pairingData = await this.processPairingData(qrData.data);
-            return { type: 'pairing_response', data: pairingData };
+            return { type: "pairing_response", data: pairingData };
           }
 
-          this.currentSession.update(s => s ? { ...s, status: 'completed', result: qrData } : null);
-          return { type: qrData.type || 'pairing_response', data: qrData };
+          this.currentSession.update((s) =>
+            s ? { ...s, status: "completed", result: qrData } : null,
+          );
+          return { type: qrData.type || "pairing_response", data: qrData };
         } catch (e) {
           // Continue to other format checks
         }
 
         // Additional tolerant attempt: strip non-printable/control characters and try to extract a JSON object
         try {
-          let cleaned = candidate.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+          let cleaned = candidate.replace(/[\x00-\x1F\x7F-\x9F]/g, "");
 
           // If it looks like it contains a JSON object, try to extract the largest {...} substring
-          const firstBrace = cleaned.indexOf('{');
-          const lastBrace = cleaned.lastIndexOf('}');
+          const firstBrace = cleaned.indexOf("{");
+          const lastBrace = cleaned.lastIndexOf("}");
 
           if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
             let jsonSub = cleaned.slice(firstBrace, lastBrace + 1);
@@ -598,32 +654,41 @@ class QRService {
               try {
                 const qrData = JSON.parse(jsonSub);
 
-                if (qrData.type === 'pairing_response') {
-                  const pairingData = await this.processPairingData(qrData.data);
-                  return { type: 'pairing_response', data: pairingData };
+                if (qrData.type === "pairing_response") {
+                  const pairingData = await this.processPairingData(
+                    qrData.data,
+                  );
+                  return { type: "pairing_response", data: pairingData };
                 }
 
                 if (qrData.publicKey) {
                   const pairingData = {
                     publicKey: qrData.publicKey,
                     chainCode: qrData.chainCode,
-                    deviceId: qrData.deviceId || 'mobile-wallet',
-                    network: qrData.network || 'mainnet',
+                    deviceId: qrData.deviceId || "mobile-wallet",
+                    network: qrData.network || "mainnet",
                     address: qrData.address,
                     addresses: qrData.addresses,
                     nostr_npub: qrData.nostr_npub,
                   };
                   const processed = await this.processPairingData(pairingData);
-                  return { type: 'pairing_response', data: processed };
+                  return { type: "pairing_response", data: processed };
                 }
 
                 if (qrData.data && qrData.data.publicKey) {
-                  const pairingData = await this.processPairingData(qrData.data);
-                  return { type: 'pairing_response', data: pairingData };
+                  const pairingData = await this.processPairingData(
+                    qrData.data,
+                  );
+                  return { type: "pairing_response", data: pairingData };
                 }
 
-                this.currentSession.update(s => s ? { ...s, status: 'completed', result: qrData } : null);
-                return { type: qrData.type || 'pairing_response', data: qrData };
+                this.currentSession.update((s) =>
+                  s ? { ...s, status: "completed", result: qrData } : null,
+                );
+                return {
+                  type: qrData.type || "pairing_response",
+                  data: qrData,
+                };
               } catch (err) {
                 // Trim one character and retry
                 jsonSub = jsonSub.slice(0, -1);
@@ -631,8 +696,7 @@ class QRService {
               }
             }
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
 
       // Heuristic: attempt to extract publicKey/chainCode from noisy/truncated JSON strings
@@ -644,34 +708,40 @@ class QRService {
           publicKey: pkMatch[1],
           chainCode: ccMatch ? ccMatch[1] : undefined,
           // keep a short preview for debugging
-          rawPreview: qrText && typeof qrText === 'string' ? qrText.toString().substring(0, 500) : String(qrText)
+          rawPreview:
+            qrText && typeof qrText === "string"
+              ? qrText.toString().substring(0, 500)
+              : String(qrText),
         };
 
         const processed = await this.processPairingData(pairingData);
-        return { type: 'pairing_response', data: processed };
+        return { type: "pairing_response", data: processed };
       }
 
       // Check if it's a raw hex public key (compressed: 66 chars, uncompressed: 130 chars)
-      if (/^[0-9a-fA-F]{66}$/.test(qrText) || /^[0-9a-fA-F]{130}$/.test(qrText)) {
+      if (
+        /^[0-9a-fA-F]{66}$/.test(qrText) ||
+        /^[0-9a-fA-F]{130}$/.test(qrText)
+      ) {
         const pairingData = { publicKey: qrText, isRawKey: true };
         const processed = await this.processPairingData(pairingData);
-        return { type: 'public_key', data: processed };
+        return { type: "public_key", data: processed };
       }
 
       // Check if it's a Bitcoin address
       if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(qrText)) {
-        return { type: 'bitcoin_address', data: { address: qrText } };
+        return { type: "bitcoin_address", data: { address: qrText } };
       }
 
       // Check if it's a BIP21 payment URI (bitcoin:address?amount=X)
-      if (qrText.toLowerCase().startsWith('bitcoin:')) {
+      if (qrText.toLowerCase().startsWith("bitcoin:")) {
         const parsed = this.parseBIP21(qrText);
-        return { type: 'payment_request', data: parsed };
+        return { type: "payment_request", data: parsed };
       }
 
       // Check if it's a base64 encoded PSBT
       if (/^cHNidP8/.test(qrText)) {
-        return { type: 'psbt_signed', data: { signedPsbt: qrText } };
+        return { type: "psbt_signed", data: { signedPsbt: qrText } };
       }
 
       // Check if it is a short numeric pairing code (common compact formats)
@@ -683,44 +753,63 @@ class QRService {
           const relayResult = await this.tryResolvePairingCodeFromRelay(code);
           if (relayResult) {
             // Normalize relayResult into pairing_response shape if necessary
-            if (relayResult.type === 'pairing_response' && relayResult.data) {
-              const pairingData = await this.processPairingData(relayResult.data);
-              return { type: 'pairing_response', data: pairingData };
+            if (relayResult.type === "pairing_response" && relayResult.data) {
+              const pairingData = await this.processPairingData(
+                relayResult.data,
+              );
+              return { type: "pairing_response", data: pairingData };
             }
 
             if (relayResult.publicKey) {
               const pairingData = await this.processPairingData(relayResult);
-              return { type: 'pairing_response', data: pairingData };
+              return { type: "pairing_response", data: pairingData };
             }
 
             if (relayResult.data && relayResult.data.publicKey) {
-              const pairingData = await this.processPairingData(relayResult.data);
-              return { type: 'pairing_response', data: pairingData };
+              const pairingData = await this.processPairingData(
+                relayResult.data,
+              );
+              return { type: "pairing_response", data: pairingData };
             }
           }
         } catch (e) {
-          console.error('[QR] Relay lookup error for pairing code', code, e);
+          console.error("[QR] Relay lookup error for pairing code", code, e);
         }
 
         // Store result in session for debugging and return explicit type so callers can handle it
-        this.currentSession.update(s => s ? { ...s, status: 'completed', result: { pairingCode: code } } : null);
-        return { type: 'pairing_code', data: { code } };
+        this.currentSession.update((s) =>
+          s
+            ? { ...s, status: "completed", result: { pairingCode: code } }
+            : null,
+        );
+        return { type: "pairing_code", data: { code } };
       }
 
       // Unknown format - but let's try to use it anyway if it looks like it might contain useful data
-      const preview = qrText && typeof qrText === 'string' ? qrText.toString().substring(0,200) : String(qrText);
-      const len = qrText && typeof qrText === 'string' ? qrText.length : undefined;
-      throw new Error(`Unrecognized QR code format. Preview (truncated): ${preview} ${len ? `(len=${len})` : ''}. Tried tolerant JSON recovery and other heuristics. Expected: pairing data (JSON with publicKey), raw public key (hex), Bitcoin address, or PSBT.`);
+      const preview =
+        qrText && typeof qrText === "string"
+          ? qrText.toString().substring(0, 200)
+          : String(qrText);
+      const len =
+        qrText && typeof qrText === "string" ? qrText.length : undefined;
+      throw new Error(
+        `Unrecognized QR code format. Preview (truncated): ${preview} ${len ? `(len=${len})` : ""}. Tried tolerant JSON recovery and other heuristics. Expected: pairing data (JSON with publicKey), raw public key (hex), Bitcoin address, or PSBT.`,
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to process QR';
-      console.error('[QR] Process error:', error);
-      
-      this.currentSession.update(s => s ? { 
-        ...s, 
-        status: 'failed', 
-        error: message 
-      } : null);
-      
+      const message =
+        error instanceof Error ? error.message : "Failed to process QR";
+      console.error("[QR] Process error:", error);
+
+      this.currentSession.update((s) =>
+        s
+          ? {
+              ...s,
+              status: "failed",
+              error: message,
+            }
+          : null,
+      );
+
       throw error;
     }
   }
@@ -732,25 +821,38 @@ class QRService {
    *  - { type: 'pairing_response', data: { publicKey, chainCode, ... } }
    *  - { publicKey: '03...', chainCode: '...', ... }
    */
-  private async tryResolvePairingCodeFromRelay(code: string): Promise<any | null> {
+  private async tryResolvePairingCodeFromRelay(
+    code: string,
+  ): Promise<any | null> {
     try {
-      const stored = await new Promise<Record<string, any>>(resolve => chrome.storage.local.get(['pairingRelayUrl'], resolve));
+      const stored = await new Promise<Record<string, any>>((resolve) =>
+        chrome.storage.local.get(["pairingRelayUrl"], resolve),
+      );
       const relayUrl: string | undefined = stored && stored.pairingRelayUrl;
       if (!relayUrl) {
         return null;
       }
 
-      const url = relayUrl.includes('?') ? `${relayUrl}&code=${encodeURIComponent(code)}` : `${relayUrl}?code=${encodeURIComponent(code)}`;
+      const url = relayUrl.includes("?")
+        ? `${relayUrl}&code=${encodeURIComponent(code)}`
+        : `${relayUrl}?code=${encodeURIComponent(code)}`;
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
 
       try {
-        const resp = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }, signal: controller.signal });
+        const resp = await fetch(url, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
         clearTimeout(timeout);
 
         if (!resp.ok) {
-          console.warn('[QR] Relay lookup returned non-OK status:', resp.status);
+          console.warn(
+            "[QR] Relay lookup returned non-OK status:",
+            resp.status,
+          );
           return null;
         }
 
@@ -758,11 +860,11 @@ class QRService {
         return body;
       } catch (err) {
         clearTimeout(timeout);
-        console.warn('[QR] Relay fetch failed or timed out:', err);
+        console.warn("[QR] Relay fetch failed or timed out:", err);
         return null;
       }
     } catch (error) {
-      console.error('[QR] Error reading pairingRelayUrl from storage:', error);
+      console.error("[QR] Error reading pairingRelayUrl from storage:", error);
       return null;
     }
   }
@@ -770,16 +872,23 @@ class QRService {
   /**
    * Parse BIP21 payment URI
    */
-  private parseBIP21(uri: string): { address: string; amount?: number; label?: string; message?: string } {
+  private parseBIP21(uri: string): {
+    address: string;
+    amount?: number;
+    label?: string;
+    message?: string;
+  } {
     const url = new URL(uri);
     const address = url.pathname;
     const params = url.searchParams;
-    
+
     return {
       address,
-      amount: params.has('amount') ? parseFloat(params.get('amount')!) : undefined,
-      label: params.get('label') || undefined,
-      message: params.get('message') || undefined
+      amount: params.has("amount")
+        ? parseFloat(params.get("amount")!)
+        : undefined,
+      label: params.get("label") || undefined,
+      message: params.get("message") || undefined,
     };
   }
 
@@ -795,11 +904,11 @@ class QRService {
       const decrypted = CryptoJS.AES.decrypt(cipher, key, {
         iv,
         mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7
+        padding: CryptoJS.pad.Pkcs7,
       });
 
       const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
-      if (!plaintext) throw new Error('Decryption resulted in empty plaintext');
+      if (!plaintext) throw new Error("Decryption resulted in empty plaintext");
 
       const parsed = JSON.parse(plaintext);
       const normalized = {
@@ -813,7 +922,7 @@ class QRService {
       };
       return normalized;
     } catch (error) {
-      console.warn('[QR] Failed to decrypt pairing payload', error);
+      console.warn("[QR] Failed to decrypt pairing payload", error);
       return null;
     }
   }
@@ -840,8 +949,11 @@ class QRService {
       nostr_npub: rawPairingData?.nostr_npub ?? rawPairingData?.npub,
     };
 
-    if (!pairingData || (!pairingData.publicKey && !pairingData.addresses && !pairingData.address)) {
-      throw new Error('Pairing payload missing expected fields');
+    if (
+      !pairingData ||
+      (!pairingData.publicKey && !pairingData.addresses && !pairingData.address)
+    ) {
+      throw new Error("Pairing payload missing expected fields");
     }
 
     await this.handlePairingResponse(pairingData);
@@ -859,7 +971,6 @@ class QRService {
    * Handle address response from mobile
    */
   private handleAddressResponse(data: any) {
-    
     if (data.addresses) {
       updateAddresses(data.addresses);
     }
@@ -869,7 +980,6 @@ class QRService {
    * Handle signed PSBT from mobile
    */
   private handleSignedPsbt(data: any) {
-    
     if (data.signedPsbt) {
       psbt.handleSignedPsbt(data.signedPsbt);
     }
@@ -885,39 +995,39 @@ class QRService {
   /**
    * Generate sample QR for testing
    */
-  async generateTestQR(type: 'addresses' | 'signed_psbt'): Promise<string> {
-    if (type === 'addresses') {
+  async generateTestQR(type: "addresses" | "signed_psbt"): Promise<string> {
+    if (type === "addresses") {
       const mockAddresses = [
         {
-          address: 'bc1qtest1example...',
+          address: "bc1qtest1example...",
           index: 0,
           balance: 50000,
-          label: 'Main',
-          isUsed: true
+          label: "Main",
+          isUsed: true,
         },
         {
-          address: 'bc1qtest2example...',
+          address: "bc1qtest2example...",
           index: 1,
           balance: 0,
-          label: 'Savings',
-          isUsed: false
-        }
+          label: "Savings",
+          isUsed: false,
+        },
       ];
 
       const qrData: QRData = {
-        type: 'address_response',
+        type: "address_response",
         data: { addresses: mockAddresses },
         timestamp: Date.now(),
-        id: 'test-' + Date.now()
+        id: "test-" + Date.now(),
       };
 
       return await this.generateQRCode(qrData);
     } else {
       const qrData: QRData = {
-        type: 'psbt_signing',
-        data: { signedPsbt: 'cHNidP8BAFUCAAAAAQ==' }, // Mock signed PSBT
+        type: "psbt_signing",
+        data: { signedPsbt: "cHNidP8BAFUCAAAAAQ==" }, // Mock signed PSBT
         timestamp: Date.now(),
-        id: 'test-' + Date.now()
+        id: "test-" + Date.now(),
       };
 
       return await this.generateQRCode(qrData);
@@ -928,23 +1038,31 @@ class QRService {
    * Helper to generate a pairing response QR (for testing or for mobile apps to pre-generate in dev)
    * Expected payload (JSON): { type: 'pairing_response', data: { publicKey, chainCode?, deviceId?, network?, address?, addresses? }, timestamp, id }
    */
-  async generatePairingResponseQR(data: { publicKey: string; chainCode?: string; deviceId?: string; network?: string; address?: string; addresses?: any[] }): Promise<string> {
-    if (!data.publicKey) throw new Error('publicKey is required to generate pairing response');
+  async generatePairingResponseQR(data: {
+    publicKey: string;
+    chainCode?: string;
+    deviceId?: string;
+    network?: string;
+    address?: string;
+    addresses?: any[];
+  }): Promise<string> {
+    if (!data.publicKey)
+      throw new Error("publicKey is required to generate pairing response");
 
     const id = `pair-res-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
     const qrData: QRData = {
-      type: 'pairing_response',
+      type: "pairing_response",
       data: {
         publicKey: data.publicKey,
         chainCode: data.chainCode,
-        deviceId: data.deviceId || 'mobile-wallet',
-        network: data.network || 'mainnet',
+        deviceId: data.deviceId || "mobile-wallet",
+        network: data.network || "mainnet",
         address: data.address,
-        addresses: data.addresses
+        addresses: data.addresses,
       },
       timestamp: Date.now(),
-      id
+      id,
     };
 
     return await this.generateQRCode(qrData);

@@ -1,68 +1,76 @@
 <script lang="ts">
-  import { psbt } from '$lib/services/psbt';
-  import { walletStore, refreshWalletData, getCurrentReceiveAddress } from '$lib/stores/wallet';
-  import QRScanner from './QRScanner.svelte';
-  import { qr } from '$lib/services/qr';
+  import { psbt } from "$lib/services/psbt";
+  import {
+    walletStore,
+    refreshWalletData,
+    getCurrentReceiveAddress,
+  } from "$lib/stores/wallet";
+  import QRScanner from "./QRScanner.svelte";
+  import { qr } from "$lib/services/qr";
 
   export let onClose: () => void;
   export let onSuccess: (txid: string) => void;
 
-  let recipientAddress = '';
-  let amountBTC = '';
+  let recipientAddress = "";
+  let amountBTC = "";
   let feeRate = 5; // sats/vByte
-  let sendMode: 'dkls' | 'psbt' = 'dkls';
+  let sendMode: "dkls" | "psbt" = "dkls";
   let isCreating = false;
   let showPsbtQR = false;
   let showScanner = false;
-  let psbtQRData = '';
-  let lastPayload = '';
-  let qrMode: 'psbt' | 'send' | null = null;
-  let copyToast = '';
+  let psbtQRData = "";
+  let lastPayload = "";
+  let qrMode: "psbt" | "send" | null = null;
+  let copyToast = "";
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
-  let error = '';
-  let step: 'form' | 'qr' | 'scanning' | 'broadcasting' = 'form';
+  let error = "";
+  let step: "form" | "qr" | "scanning" | "broadcasting" = "form";
   const psbtSession = psbt.session;
-  let lastCompletedTxid = '';
+  let lastCompletedTxid = "";
   let isCheckingBranta = false;
   let brantaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let brantaMerchant: {
-      merchantId?: string;
-      merchantName: string;
-      logoUrl?: string;
-      verifyUrl?: string;
-      } | null = null;
+    merchantId?: string;
+    merchantName: string;
+    logoUrl?: string;
+    verifyUrl?: string;
+  } | null = null;
   let brantaLogoError = false;
 
   function hasBrantaPayloadMarkers(value: string): boolean {
     const lower = value.toLowerCase();
     return (
-      lower.includes('branta_id=') ||
-      lower.includes('branta_secret=') ||
-      lower.includes('/v2/verify/') ||
-      lower.includes('k-')
+      lower.includes("branta_id=") ||
+      lower.includes("branta_secret=") ||
+      lower.includes("/v2/verify/") ||
+      lower.includes("k-")
     );
   }
 
   function parseBitcoinAddressInput(value: string): string | null {
-    const candidate = (value || '').trim();
+    const candidate = (value || "").trim();
     if (!candidate) return null;
-    if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(candidate)) return candidate;
+    if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(candidate))
+      return candidate;
 
-    if (candidate.toLowerCase().startsWith('bitcoin:')) {
-      const rest = candidate.slice(8).split('?')[0].trim();
+    if (candidate.toLowerCase().startsWith("bitcoin:")) {
+      const rest = candidate.slice(8).split("?")[0].trim();
       if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(rest)) return rest;
     }
 
-    if (candidate.includes('|')) {
-      const maybe = candidate.split('|')[0].trim();
-      if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(maybe)) return maybe;
+    if (candidate.includes("|")) {
+      const maybe = candidate.split("|")[0].trim();
+      if (/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/.test(maybe))
+        return maybe;
     }
 
     return null;
   }
 
-  function buildBrantaLookupInput(value: string): { payload: string; isQrCode: boolean } | null {
-    const candidate = (value || '').trim();
+  function buildBrantaLookupInput(
+    value: string,
+  ): { payload: string; isQrCode: boolean } | null {
+    const candidate = (value || "").trim();
     if (!candidate) return null;
 
     if (hasBrantaPayloadMarkers(candidate)) {
@@ -73,7 +81,9 @@
     if (!extractedAddress) return null;
 
     return {
-      payload: hasBrantaPayloadMarkers(candidate) ? candidate : extractedAddress,
+      payload: hasBrantaPayloadMarkers(candidate)
+        ? candidate
+        : extractedAddress,
       isQrCode: hasBrantaPayloadMarkers(candidate),
     };
   }
@@ -83,12 +93,18 @@
     const normalizedInput = rawUrl.trim();
     if (!normalizedInput) return undefined;
 
-    if (normalizedInput.startsWith('//')) return `https:${normalizedInput}`;
-    if (normalizedInput.startsWith('ipfs://')) {
-      const cidPath = normalizedInput.replace(/^ipfs:\/\//i, '').replace(/^ipfs\//i, '');
+    if (normalizedInput.startsWith("//")) return `https:${normalizedInput}`;
+    if (normalizedInput.startsWith("ipfs://")) {
+      const cidPath = normalizedInput
+        .replace(/^ipfs:\/\//i, "")
+        .replace(/^ipfs\//i, "");
       return `https://ipfs.io/ipfs/${cidPath}`;
     }
-    if (/^https?:\/\//i.test(normalizedInput) || normalizedInput.startsWith('data:') || normalizedInput.startsWith('blob:')) {
+    if (
+      /^https?:\/\//i.test(normalizedInput) ||
+      normalizedInput.startsWith("data:") ||
+      normalizedInput.startsWith("blob:")
+    ) {
       return normalizedInput;
     }
     if (/^[a-z0-9.-]+\.[a-z]{2,}($|\/)/i.test(normalizedInput)) {
@@ -98,7 +114,11 @@
     return normalizedInput;
   }
 
-  $: if ($psbtSession?.status === 'broadcasted' && $psbtSession.txid && $psbtSession.txid !== lastCompletedTxid) {
+  $: if (
+    $psbtSession?.status === "broadcasted" &&
+    $psbtSession.txid &&
+    $psbtSession.txid !== lastCompletedTxid
+  ) {
     lastCompletedTxid = $psbtSession.txid;
     onSuccess($psbtSession.txid);
   }
@@ -118,25 +138,28 @@
     const lookupInput = buildBrantaLookupInput(addr);
     if (!lookupInput) {
       if (addr.trim().length > 0) {
-        console.log('[Branta][SendTransaction] Address skipped (failed local validation)', {
-          address: addr,
-          length: addr.trim().length,
-        });
+        console.log(
+          "[Branta][SendTransaction] Address skipped (failed local validation)",
+          {
+            address: addr,
+            length: addr.trim().length,
+          },
+        );
       }
       return;
     }
 
     brantaDebounceTimer = setTimeout(async () => {
       isCheckingBranta = true;
-      console.log('[Branta][SendTransaction] Lookup start', {
+      console.log("[Branta][SendTransaction] Lookup start", {
         address: addr,
-        payloadPreview: `${lookupInput.payload.slice(0, 24)}${lookupInput.payload.length > 24 ? '...' : ''}`,
+        payloadPreview: `${lookupInput.payload.slice(0, 24)}${lookupInput.payload.length > 24 ? "..." : ""}`,
         isQrCode: lookupInput.isQrCode,
         network: $walletStore.network,
       });
       try {
         const response = await chrome.runtime.sendMessage({
-          type: 'VERIFY_BRANTA_ADDRESS',
+          type: "VERIFY_BRANTA_ADDRESS",
           address: lookupInput.payload,
           isQrCode: lookupInput.isQrCode,
           network: $walletStore.network,
@@ -146,23 +169,33 @@
           const { payment, verifyUrl } = response.data;
           brantaMerchant = {
             merchantId: payment.merchantId || payment.id || payment._id,
-            merchantName: payment.merchantName || payment.name || payment.displayName || payment.platform || 'Verified Merchant',
-            logoUrl: normalizeBrantaLogoUrl(payment.logoUrl || payment.platformLogoUrl || payment.icon || payment.logo),
+            merchantName:
+              payment.merchantName ||
+              payment.name ||
+              payment.displayName ||
+              payment.platform ||
+              "Verified Merchant",
+            logoUrl: normalizeBrantaLogoUrl(
+              payment.logoUrl ||
+                payment.platformLogoUrl ||
+                payment.icon ||
+                payment.logo,
+            ),
             verifyUrl,
           };
           brantaLogoError = false;
-          console.log('[Branta][SendTransaction] Lookup success', {
+          console.log("[Branta][SendTransaction] Lookup success", {
             hasMerchant: !!brantaMerchant,
             logoUrl: brantaMerchant.logoUrl || null,
             merchantName: brantaMerchant.merchantName,
           });
         } else {
-          console.log('[Branta][SendTransaction] Lookup returned no data', {
+          console.log("[Branta][SendTransaction] Lookup returned no data", {
             response,
           });
         }
       } catch (err) {
-        console.warn('Branta verification error:', err);
+        console.warn("Branta verification error:", err);
       } finally {
         isCheckingBranta = false;
       }
@@ -172,7 +205,9 @@
   // Subscribe to QR session updates
   $: qrSession = qr.session;
 
-  $: amountSats = amountBTC ? Math.floor(parseFloat(amountBTC) * 100_000_000) : 0;
+  $: amountSats = amountBTC
+    ? Math.floor(parseFloat(amountBTC) * 100_000_000)
+    : 0;
   $: estimatedFee = Math.ceil(250 * feeRate); // Rough estimate
   $: totalSats = amountSats + estimatedFee;
   $: totalBTC = (totalSats / 100_000_000).toFixed(8);
@@ -180,13 +215,17 @@
   async function handleCreatePsbt() {
     const resolvedRecipientAddress = parseBitcoinAddressInput(recipientAddress);
     if (!resolvedRecipientAddress || !amountBTC || parseFloat(amountBTC) <= 0) {
-      error = 'Please fill in all fields';
+      error = "Please fill in all fields";
       return;
     }
 
     // Validate address format
-    if (!resolvedRecipientAddress.match(/^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/)) {
-      error = 'Invalid Bitcoin address';
+    if (
+      !resolvedRecipientAddress.match(
+        /^(bc1|tb1|[13mn2])[a-zA-HJ-NP-Z0-9]{25,90}$/,
+      )
+    ) {
+      error = "Invalid Bitcoin address";
       return;
     }
 
@@ -197,47 +236,60 @@
     }
 
     isCreating = true;
-    error = '';
+    error = "";
 
     try {
       // Attach any verified Branta merchant metadata to the active PSBT session
       // so it can be persisted with the broadcast transaction.
       psbt.setBrantaMerchant(brantaMerchant);
 
-      const pairedNostrNpub = ($walletStore.pairedNostrNpub || '').trim();
+      const pairedNostrNpub = ($walletStore.pairedNostrNpub || "").trim();
 
-      if (sendMode === 'dkls') {
+      if (sendMode === "dkls") {
         // Regular DKLS MPC Transaction: never build/send a PSBT. The paired mobile
         // device signs with its own DKLS committee peer and broadcasts itself.
         if (pairedNostrNpub) {
-          const { qrDataUrl } = await psbt.requestNativeSend({ recipientAddress: resolvedRecipientAddress, amountSats, feeRate });
+          const { qrDataUrl } = await psbt.requestNativeSend({
+            recipientAddress: resolvedRecipientAddress,
+            amountSats,
+            feeRate,
+          });
           // Strictly airgapped initiation: extension only shows QR for mobile scan.
           psbtQRData = qrDataUrl;
-          lastPayload = '';
-          qrMode = 'send';
-          step = 'qr';
+          lastPayload = "";
+          qrMode = "send";
+          step = "qr";
           showPsbtQR = true;
 
-          copyToast = 'Send QR generated — scan with your mobile to continue';
+          copyToast = "Send QR generated — scan with your mobile to continue";
           if (toastTimer) clearTimeout(toastTimer);
-          toastTimer = setTimeout(() => (copyToast = ''), 4000);
+          toastTimer = setTimeout(() => (copyToast = ""), 4000);
           return;
         }
 
         // No live Nostr channel yet: fall back to the plain send-fill QR (v5 format),
         // which mobile already recognizes as a native, non-PSBT send request.
-        const addressType = $walletStore.hdState?.addressType || 'segwit-native';
-        const derivationPath = getCurrentReceiveAddress()?.path || '';
-        const res = await qr.generateSendQR(resolvedRecipientAddress, amountSats, estimatedFee, '', addressType, derivationPath, $walletStore.network);
+        const addressType =
+          $walletStore.hdState?.addressType || "segwit-native";
+        const derivationPath = getCurrentReceiveAddress()?.path || "";
+        const res = await qr.generateSendQR(
+          resolvedRecipientAddress,
+          amountSats,
+          estimatedFee,
+          "",
+          addressType,
+          derivationPath,
+          $walletStore.network,
+        );
         psbtQRData = res.dataUrl;
         lastPayload = res.payload;
-        qrMode = 'send';
-        step = 'qr';
+        qrMode = "send";
+        step = "qr";
         showPsbtQR = true;
 
-        copyToast = 'QR generated — scan with your mobile to complete the send';
+        copyToast = "QR generated — scan with your mobile to complete the send";
         if (toastTimer) clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => (copyToast = ''), 3000);
+        toastTimer = setTimeout(() => (copyToast = ""), 3000);
         return;
       }
 
@@ -246,11 +298,11 @@
       const { psbtBase64, feeSats } = await psbt.createPsbt({
         recipientAddress: resolvedRecipientAddress,
         amountSats,
-        feeRate
+        feeRate,
       });
 
       // Update UI to show the actual fee calculated
-      if (typeof feeSats === 'number') {
+      if (typeof feeSats === "number") {
         estimatedFee = feeSats; // reactive variable bound in parent scope (amount/fee/total display)
       }
 
@@ -261,12 +313,13 @@
         psbtQRData = $qrSession.qrCodeDataUrl;
       }
 
-      qrMode = 'psbt';
-      step = 'qr';
+      qrMode = "psbt";
+      step = "qr";
       showPsbtQR = true;
     } catch (err) {
-      console.error('Error creating PSBT:', err);
-      error = err instanceof Error ? err.message : 'Failed to create transaction';
+      console.error("Error creating PSBT:", err);
+      error =
+        err instanceof Error ? err.message : "Failed to create transaction";
     } finally {
       isCreating = false;
     }
@@ -274,20 +327,20 @@
 
   function handleShowScanner() {
     showPsbtQR = false;
-    step = 'scanning';
+    step = "scanning";
     showScanner = true;
   }
 
   async function handleSignedPsbtScanned(signedPsbtData: string) {
     showScanner = false;
-    step = 'broadcasting';
+    step = "broadcasting";
 
     try {
       // Parse the signed PSBT QR response
       const response = JSON.parse(signedPsbtData);
-      
-      if (response.type !== 'psbt_signed') {
-        throw new Error('Invalid QR code - expected signed PSBT');
+
+      if (response.type !== "psbt_signed") {
+        throw new Error("Invalid QR code - expected signed PSBT");
       }
 
       // Process the signed PSBT
@@ -299,15 +352,16 @@
       // Success!
       onSuccess(txid);
     } catch (err) {
-      console.error('Error broadcasting transaction:', err);
-      error = err instanceof Error ? err.message : 'Failed to broadcast transaction';
-      step = 'form';
+      console.error("Error broadcasting transaction:", err);
+      error =
+        err instanceof Error ? err.message : "Failed to broadcast transaction";
+      step = "form";
     }
   }
 
   function handleScannerClose() {
     showScanner = false;
-    step = 'qr';
+    step = "qr";
     showPsbtQR = true;
   }
 
@@ -316,7 +370,7 @@
     try {
       await refreshWalletData();
     } catch (e) {
-      console.warn('Refresh on back failed', e);
+      console.warn("Refresh on back failed", e);
     }
     onClose();
   }
@@ -324,12 +378,16 @@
 
 <div class="send-container">
   <div class="header">
-    <button class="back-btn" on:click={handleBack} aria-label="Back to transactions">← Back</button>
+    <button
+      class="back-btn"
+      on:click={handleBack}
+      aria-label="Back to transactions">← Back</button
+    >
     <h2>Send Bitcoin</h2>
     <button class="close-btn" on:click={onClose}>✕</button>
   </div>
 
-  {#if step === 'form'}
+  {#if step === "form"}
     <div class="form">
       <div class="field">
         <label for="recipient">Recipient Address</label>
@@ -341,7 +399,7 @@
           class="input"
         />
 
-      {#if isCheckingBranta}
+        {#if isCheckingBranta}
           <div class="branta-status checking">Verifying with Branta...</div>
         {:else if brantaMerchant}
           <div class="branta-badge">
@@ -360,14 +418,18 @@
               <span class="verified-tag">Branta Verified</span>
             </div>
             {#if brantaMerchant.verifyUrl}
-              <a href={brantaMerchant.verifyUrl} target="_blank" rel="noreferrer" class="verify-link">
+              <a
+                href={brantaMerchant.verifyUrl}
+                target="_blank"
+                rel="noreferrer"
+                class="verify-link"
+              >
                 Proof ↗
               </a>
             {/if}
           </div>
         {/if}
       </div>
-
 
       <div class="field">
         <label for="amount">Amount (BTC)</label>
@@ -399,25 +461,27 @@
           <button
             type="button"
             class="mode-option"
-            class:active={sendMode === 'dkls'}
-            on:click={() => (sendMode = 'dkls')}
+            class:active={sendMode === "dkls"}
+            on:click={() => (sendMode = "dkls")}
           >
             Regular MPC
           </button>
           <button
             type="button"
             class="mode-option"
-            class:active={sendMode === 'psbt'}
-            on:click={() => (sendMode = 'psbt')}
+            class:active={sendMode === "psbt"}
+            on:click={() => (sendMode = "psbt")}
           >
             Standard PSBT Export
           </button>
         </div>
         <p class="hint">
-          {#if sendMode === 'dkls'}
-            Your paired mobile device signs directly with native MPC \u2014 no PSBT file is created.
+          {#if sendMode === "dkls"}
+            Your paired mobile device signs directly with native MPC \u2014 no
+            PSBT file is created.
           {:else}
-            Builds a standard PSBT for external co-signing or import into another wallet.
+            Builds a standard PSBT for external co-signing or import into
+            another wallet.
           {/if}
         </p>
       </div>
@@ -425,7 +489,7 @@
       <div class="summary">
         <div class="summary-row">
           <span>Amount:</span>
-          <span>{amountBTC || '0.00000000'} BTC</span>
+          <span>{amountBTC || "0.00000000"} BTC</span>
         </div>
         <div class="summary-row">
           <span>Est. Fee:</span>
@@ -441,44 +505,73 @@
         <div class="error">{error}</div>
       {/if}
 
-      <button 
-        class="btn-primary" 
+      <button
+        class="btn-primary"
         on:click={handleCreatePsbt}
         disabled={isCreating}
       >
-        {isCreating ? 'Creating Transaction...' : 'Create Transaction'}
+        {isCreating ? "Creating Transaction..." : "Create Transaction"}
       </button>
     </div>
-  {:else if step === 'qr'}
+  {:else if step === "qr"}
     <div class="qr-section">
-      {#if qrMode === 'psbt'}
-        <p class="instruction">Scan this QR code with your mobile wallet to sign the transaction</p>
-        {#if $psbtSession?.deliveryMode === 'nostr+qr'}
+      {#if qrMode === "psbt"}
+        <p class="instruction">
+          Scan this QR code with your mobile wallet to sign the transaction
+        </p>
+        {#if $psbtSession?.deliveryMode === "nostr+qr"}
           <p class="instruction" style="margin-top: 6px; opacity: 0.9;">
             Awaiting peer approval over Nostr… QR fallback stays available.
-            {#if $psbtSession?.nostrState === 'timeout'}
+            {#if $psbtSession?.nostrState === "timeout"}
               Nostr delivery timed out.
-            {:else if $psbtSession?.nostrState === 'failed'}
+            {:else if $psbtSession?.nostrState === "failed"}
               Nostr delivery failed.
-            {:else if $psbtSession?.nostrState === 'delivered'}
+            {:else if $psbtSession?.nostrState === "delivered"}
               Signed PSBT received over Nostr.
             {/if}
           </p>
         {/if}
       {:else}
-        <p class="instruction">Scan this QR code with your mobile wallet to populate the send form (address, amount, fee) and complete the send from your mobile device.</p>
+        <p class="instruction">
+          Scan this QR code with your mobile wallet to populate the send form
+          (address, amount, fee) and complete the send from your mobile device.
+        </p>
       {/if}
       <img src={psbtQRData} alt="QR Code" />
 
-      <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px;">
-        <button on:click={async () => { if (lastPayload) { await navigator.clipboard.writeText(lastPayload); copyToast = 'Payload copied'; if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => (copyToast = ''), 3000); } }} style="padding:8px 12px;border-radius:8px;border:none;background:var(--color-subPrimary);color:var(--color-textOnPrimary);">Copy Payload</button>
-        <button on:click={async () => { if (psbtQRData) { await navigator.clipboard.writeText(psbtQRData); copyToast = 'Data URL copied'; if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => (copyToast = ''), 3000); } }} style="padding:8px 12px;border-radius:8px;border:1px solid var(--color-border);background:transparent;color:var(--color-text);">Copy Data URL</button>
+      <div
+        style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px;"
+      >
+        <button
+          on:click={async () => {
+            if (lastPayload) {
+              await navigator.clipboard.writeText(lastPayload);
+              copyToast = "Payload copied";
+              if (toastTimer) clearTimeout(toastTimer);
+              toastTimer = setTimeout(() => (copyToast = ""), 3000);
+            }
+          }}
+          style="padding:8px 12px;border-radius:8px;border:none;background:var(--color-subPrimary);color:var(--color-textOnPrimary);"
+          >Copy Payload</button
+        >
+        <button
+          on:click={async () => {
+            if (psbtQRData) {
+              await navigator.clipboard.writeText(psbtQRData);
+              copyToast = "Data URL copied";
+              if (toastTimer) clearTimeout(toastTimer);
+              toastTimer = setTimeout(() => (copyToast = ""), 3000);
+            }
+          }}
+          style="padding:8px 12px;border-radius:8px;border:1px solid var(--color-border);background:transparent;color:var(--color-text);"
+          >Copy Data URL</button
+        >
       </div>
 
       {#if copyToast}
         <div class="copy-toast">{copyToast}</div>
       {/if}
-      
+
       {#if psbtQRData}
         <div class="qr-code">
           <img src={psbtQRData} alt="PSBT QR Code" />
@@ -488,17 +581,28 @@
       <button class="btn-primary" on:click={handleShowScanner}>
         I've Scanned - Now Scan Signed PSBT
       </button>
-      
-      <button class="btn-text" on:click={() => { step = 'form'; psbt.clearSession(); }}>
+
+      <button
+        class="btn-text"
+        on:click={() => {
+          step = "form";
+          psbt.clearSession();
+        }}
+      >
         Cancel
       </button>
     </div>
-  {:else if step === 'scanning'}
+  {:else if step === "scanning"}
     <div class="scanner-section">
-      <p class="instruction">Scan the signed PSBT QR code from your mobile wallet</p>
-      <QRScanner onScan={handleSignedPsbtScanned} onClose={handleScannerClose} />
+      <p class="instruction">
+        Scan the signed PSBT QR code from your mobile wallet
+      </p>
+      <QRScanner
+        onScan={handleSignedPsbtScanned}
+        onClose={handleScannerClose}
+      />
     </div>
-  {:else if step === 'broadcasting'}
+  {:else if step === "broadcasting"}
     <div class="broadcasting">
       <div class="spinner"></div>
       <p>Broadcasting transaction...</p>
@@ -512,8 +616,8 @@
     max-width: 400px;
     background: #ffffff;
     color: #111827;
-    border: 1px solid rgba(0,0,0,0.06);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
   }
 
   .header {
@@ -713,8 +817,9 @@
     display: inline-block;
     margin: 20px 0;
     border: 2px solid rgba(247, 147, 26, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
-                0 0 40px rgba(247, 147, 26, 0.15);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 0 40px rgba(247, 147, 26, 0.15);
   }
 
   .qr-code img {
@@ -740,7 +845,9 @@
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .broadcasting p {

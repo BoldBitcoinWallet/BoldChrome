@@ -8,12 +8,12 @@ import { BrantaService } from "@branta-ops/branta/v2";
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error: Error) =>
-    console.error('[Bold] Failed to set side panel behavior:', error)
+    console.error("[Bold] Failed to set side panel behavior:", error),
   );
 
-const STAGING_BRANTA_BASE_URL = 'https://staging.guardrail.branta.pro';
-const PRODUCTION_BRANTA_BASE_URL = 'https://guardrail.branta.pro';
-const LOCALHOST_BRANTA_BASE_URL = 'http://localhost:3000';
+const STAGING_BRANTA_BASE_URL = "https://staging.guardrail.branta.pro";
+const PRODUCTION_BRANTA_BASE_URL = "https://guardrail.branta.pro";
+const LOCALHOST_BRANTA_BASE_URL = "http://localhost:3000";
 
 const BRANTA_SERVER_TO_URL: Record<string, string> = {
   [BrantaServerBaseUrl.Staging]: STAGING_BRANTA_BASE_URL,
@@ -22,36 +22,44 @@ const BRANTA_SERVER_TO_URL: Record<string, string> = {
 };
 
 const brantaServiceCache = new Map<string, BrantaService>();
-type BrantaPrivacyMode = 'strict' | 'loose';
+type BrantaPrivacyMode = "strict" | "loose";
 
-function inferNetworkFromAddress(address: string): 'mainnet' | 'testnet' {
-  const value = (address || '').trim().toLowerCase();
-  if (value.startsWith('tb1') || value.startsWith('m') || value.startsWith('n') || value.startsWith('2')) {
-    return 'testnet';
+function inferNetworkFromAddress(address: string): "mainnet" | "testnet" {
+  const value = (address || "").trim().toLowerCase();
+  if (
+    value.startsWith("tb1") ||
+    value.startsWith("m") ||
+    value.startsWith("n") ||
+    value.startsWith("2")
+  ) {
+    return "testnet";
   }
-  return 'mainnet';
+  return "mainnet";
 }
 
-function resolveBrantaBaseUrl(network: 'mainnet' | 'testnet'): string {
-  if (network === 'testnet') {
+function resolveBrantaBaseUrl(network: "mainnet" | "testnet"): string {
+  if (network === "testnet") {
     return BrantaServerBaseUrl.Staging;
   }
   return BrantaServerBaseUrl.Production;
 }
 
-function getCandidateBrantaBaseUrls(network: 'mainnet' | 'testnet'): string[] {
+function getCandidateBrantaBaseUrls(network: "mainnet" | "testnet"): string[] {
   // Strict environment routing: never cross-fallback between testnet and mainnet.
   return [resolveBrantaBaseUrl(network)];
 }
 
 function resolveBrantaHttpBaseUrl(serverOrUrl: string): string {
-  const trimmed = (serverOrUrl || '').trim();
+  const trimmed = (serverOrUrl || "").trim();
   if (!trimmed) return STAGING_BRANTA_BASE_URL;
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return BRANTA_SERVER_TO_URL[trimmed] || trimmed;
 }
 
-function getBrantaServiceForBaseUrl(baseUrl: string, privacy: BrantaPrivacyMode = 'strict'): BrantaService {
+function getBrantaServiceForBaseUrl(
+  baseUrl: string,
+  privacy: BrantaPrivacyMode = "strict",
+): BrantaService {
   const cacheKey = `${baseUrl}::${privacy}`;
   const cached = brantaServiceCache.get(cacheKey);
   if (cached) return cached;
@@ -64,23 +72,32 @@ function getBrantaServiceForBaseUrl(baseUrl: string, privacy: BrantaPrivacyMode 
   return service;
 }
 
-function summarizePayloadShape(value: unknown): { kind: string; keys?: string[]; length?: number } {
+function summarizePayloadShape(value: unknown): {
+  kind: string;
+  keys?: string[];
+  length?: number;
+} {
   if (Array.isArray(value)) {
-    return { kind: 'array', length: value.length };
+    return { kind: "array", length: value.length };
   }
-  if (value && typeof value === 'object') {
-    return { kind: 'object', keys: Object.keys(value as Record<string, unknown>).slice(0, 16) };
+  if (value && typeof value === "object") {
+    return {
+      kind: "object",
+      keys: Object.keys(value as Record<string, unknown>).slice(0, 16),
+    };
   }
   return { kind: typeof value };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function firstString(...values: unknown[]): string | undefined {
   for (const value of values) {
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       const trimmed = value.trim();
       if (trimmed) return trimmed;
     }
@@ -90,7 +107,7 @@ function firstString(...values: unknown[]): string | undefined {
 
 function pickFirstPaymentLike(raw: unknown): Record<string, unknown> | null {
   if (Array.isArray(raw)) {
-    const first = raw.find((item) => item && typeof item === 'object');
+    const first = raw.find((item) => item && typeof item === "object");
     return asRecord(first);
   }
 
@@ -99,21 +116,34 @@ function pickFirstPaymentLike(raw: unknown): Record<string, unknown> | null {
 
   const paymentsValue = root.payments;
   if (Array.isArray(paymentsValue) && paymentsValue.length > 0) {
-    const first = paymentsValue.find((item) => item && typeof item === 'object');
+    const first = paymentsValue.find(
+      (item) => item && typeof item === "object",
+    );
     return asRecord(first);
   }
 
   // Some environments may return merchant/profile fields at root instead of payments[].
   const merchant = asRecord(root.merchant);
   const profile = asRecord(root.profile);
-  if (merchant || profile || root.logo || root.logoUrl || root.platformLogoUrl || root.name || root.merchantName || root.platform) {
+  if (
+    merchant ||
+    profile ||
+    root.logo ||
+    root.logoUrl ||
+    root.platformLogoUrl ||
+    root.name ||
+    root.merchantName ||
+    root.platform
+  ) {
     return root;
   }
 
   return null;
 }
 
-function normalizePaymentLike(rawPayment: Record<string, unknown>): Record<string, unknown> {
+function normalizePaymentLike(
+  rawPayment: Record<string, unknown>,
+): Record<string, unknown> {
   const merchant = asRecord(rawPayment.merchant);
   const profile = asRecord(rawPayment.profile);
   const metadata = asRecord(rawPayment.metadata);
@@ -143,7 +173,7 @@ function normalizePaymentLike(rawPayment: Record<string, unknown>): Record<strin
       profile?.name,
       profile?.displayName,
       profile?.brandName,
-      'Verified Merchant',
+      "Verified Merchant",
     ),
     logoUrl: firstString(
       rawPayment.logoUrl,
@@ -168,7 +198,12 @@ function normalizePaymentLike(rawPayment: Record<string, unknown>): Record<strin
       metadata?.logo,
     ),
     status: firstString(rawPayment.status, merchant?.status, profile?.status),
-    riskLevel: firstString(rawPayment.riskLevel, rawPayment.risk, merchant?.riskLevel, profile?.riskLevel),
+    riskLevel: firstString(
+      rawPayment.riskLevel,
+      rawPayment.risk,
+      merchant?.riskLevel,
+      profile?.riskLevel,
+    ),
   };
 }
 
@@ -177,13 +212,13 @@ async function fetchBrantaRawLookup(
   input: string,
 ): Promise<{ payment: Record<string, unknown>; verifyUrl?: string } | null> {
   const resolvedBaseUrl = resolveBrantaHttpBaseUrl(baseUrl);
-  const trimmedBase = resolvedBaseUrl.replace(/\/+$/, '');
+  const trimmedBase = resolvedBaseUrl.replace(/\/+$/, "");
   const encodedInput = encodeURIComponent(input);
-  const endpointName = '/v2/payments/{address}';
+  const endpointName = "/v2/payments/{address}";
   const url = `${trimmedBase}/v2/payments/${encodedInput}`;
 
   try {
-    console.log('[Branta] Raw API request', {
+    console.log("[Branta] Raw API request", {
       baseUrl,
       resolvedBaseUrl: trimmedBase,
       endpoint: endpointName,
@@ -192,19 +227,21 @@ async function fetchBrantaRawLookup(
     });
 
     const response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
+      method: "GET",
+      headers: { Accept: "application/json" },
     });
 
-    const contentType = response.headers.get('content-type') || '';
+    const contentType = response.headers.get("content-type") || "";
     const bodyText = await response.text();
-    const parsed = bodyText.trim() && contentType.toLowerCase().includes('application/json')
-      ? (JSON.parse(bodyText) as unknown)
-      : null;
+    const parsed =
+      bodyText.trim() && contentType.toLowerCase().includes("application/json")
+        ? (JSON.parse(bodyText) as unknown)
+        : null;
 
     if (!response.ok) {
-      const errorMessage = firstString(asRecord(parsed)?.error) || response.statusText;
-      console.warn('[Branta] Raw API lookup non-ok response', {
+      const errorMessage =
+        firstString(asRecord(parsed)?.error) || response.statusText;
+      console.warn("[Branta] Raw API lookup non-ok response", {
         endpoint: endpointName,
         status: response.status,
         statusText: response.statusText,
@@ -215,15 +252,18 @@ async function fetchBrantaRawLookup(
     }
 
     if (!bodyText.trim()) {
-      console.log('[Branta] Raw API response empty body', {
+      console.log("[Branta] Raw API response empty body", {
         endpoint: endpointName,
         url,
       });
       return null;
     }
 
-    if (!contentType.toLowerCase().includes('application/json') || parsed == null) {
-      console.log('[Branta] Raw API response skipped (non-JSON)', {
+    if (
+      !contentType.toLowerCase().includes("application/json") ||
+      parsed == null
+    ) {
+      console.log("[Branta] Raw API response skipped (non-JSON)", {
         endpoint: endpointName,
         url,
         contentType,
@@ -232,7 +272,7 @@ async function fetchBrantaRawLookup(
       return null;
     }
 
-    console.log('[Branta] Raw API response payload', {
+    console.log("[Branta] Raw API response payload", {
       endpoint: endpointName,
       url,
       shape: summarizePayloadShape(parsed),
@@ -249,7 +289,7 @@ async function fetchBrantaRawLookup(
     const normalized = normalizePaymentLike(paymentLike);
     return { payment: normalized, verifyUrl };
   } catch (error) {
-    console.warn('[Branta] Raw API lookup failed', {
+    console.warn("[Branta] Raw API lookup failed", {
       endpoint: endpointName,
       reason: error instanceof Error ? error.message : String(error),
       url,
@@ -259,8 +299,8 @@ async function fetchBrantaRawLookup(
 }
 
 function getBrantaService(
-  network: 'mainnet' | 'testnet',
-  privacy: BrantaPrivacyMode = 'strict',
+  network: "mainnet" | "testnet",
+  privacy: BrantaPrivacyMode = "strict",
 ): BrantaService {
   const baseUrl = resolveBrantaBaseUrl(network);
   const cacheKey = `${baseUrl}::${privacy}`;
@@ -277,20 +317,21 @@ function getBrantaService(
 
 // Message listener to interface with Svelte components
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'VERIFY_BRANTA_ADDRESS') {
-    console.log('[Branta] VERIFY_BRANTA_ADDRESS received', {
-      from: sender?.url || sender?.origin || 'unknown',
+  if (message.type === "VERIFY_BRANTA_ADDRESS") {
+    console.log("[Branta] VERIFY_BRANTA_ADDRESS received", {
+      from: sender?.url || sender?.origin || "unknown",
       networkHint: message.network,
       isQrCode: message.isQrCode === true,
-      inputPreview: typeof message.address === 'string'
-        ? `${message.address.slice(0, 6)}...${message.address.slice(-4)}`
-        : 'invalid-input',
+      inputPreview:
+        typeof message.address === "string"
+          ? `${message.address.slice(0, 6)}...${message.address.slice(-4)}`
+          : "invalid-input",
     });
 
     lookupBranta(message.address, message.network, message.isQrCode === true)
       .then((data) => sendResponse({ success: true, data }))
       .catch((error) => {
-        console.warn('[Branta] Message handler lookup failure', {
+        console.warn("[Branta] Message handler lookup failure", {
           reason: error instanceof Error ? error.message : String(error),
         });
         sendResponse({ success: false, data: null });
@@ -302,20 +343,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function lookupBranta(
   input: string,
-  networkHint?: 'mainnet' | 'testnet' | 'testnet4',
+  networkHint?: "mainnet" | "testnet" | "testnet4",
   isQrCode = false,
 ) {
   try {
-    console.log('[Branta] Lookup start', {
+    console.log("[Branta] Lookup start", {
       networkHint,
       isQrCode,
       inputPreview: `${input.slice(0, 6)}...${input.slice(-4)}`,
     });
 
-    const network = networkHint === 'testnet' || networkHint === 'testnet4'
-      ? 'testnet'
-      : inferNetworkFromAddress(input);
-    const privacy: BrantaPrivacyMode = isQrCode ? 'strict' : 'loose';
+    const network =
+      networkHint === "testnet" || networkHint === "testnet4"
+        ? "testnet"
+        : inferNetworkFromAddress(input);
+    const privacy: BrantaPrivacyMode = isQrCode ? "strict" : "loose";
     const baseUrlsToTry = isQrCode
       ? [resolveBrantaBaseUrl(network)]
       : getCandidateBrantaBaseUrls(network);
@@ -325,15 +367,19 @@ async function lookupBranta(
       const result = isQrCode
         ? await service.getPaymentsByQrCode(input)
         : await service.getPayments(input);
-      const paymentsCount = Array.isArray(result?.payments) ? result.payments.length : 0;
+      const paymentsCount = Array.isArray(result?.payments)
+        ? result.payments.length
+        : 0;
 
-      console.log('[Branta] Lookup attempt completed', {
+      console.log("[Branta] Lookup attempt completed", {
         network,
         isQrCode,
         baseUrl,
         resolvedBaseUrl: resolveBrantaHttpBaseUrl(baseUrl),
         paymentsFound: paymentsCount,
-        firstPaymentKeys: result?.payments?.[0] ? Object.keys(result.payments[0]).slice(0, 12) : [],
+        firstPaymentKeys: result?.payments?.[0]
+          ? Object.keys(result.payments[0]).slice(0, 12)
+          : [],
       });
 
       if (paymentsCount > 0) {
@@ -349,7 +395,7 @@ async function lookupBranta(
       if (!isQrCode) {
         const rawFallback = await fetchBrantaRawLookup(baseUrl, input);
         if (rawFallback?.payment) {
-          console.log('[Branta] Raw fallback produced merchant profile', {
+          console.log("[Branta] Raw fallback produced merchant profile", {
             baseUrl,
             merchantName: rawFallback.payment.merchantName,
             hasLogo: !!rawFallback.payment.logoUrl,
@@ -359,14 +405,14 @@ async function lookupBranta(
       }
     }
 
-    console.log('[Branta] Lookup completed with no matching merchant profile', {
+    console.log("[Branta] Lookup completed with no matching merchant profile", {
       network,
       isQrCode,
       attempts: baseUrlsToTry.length,
     });
     return null;
   } catch (error) {
-    console.warn('[Branta] Lookup failed', {
+    console.warn("[Branta] Lookup failed", {
       reason: error instanceof Error ? error.message : String(error),
       inputPreview: `${input.slice(0, 6)}...${input.slice(-4)}`,
     });
